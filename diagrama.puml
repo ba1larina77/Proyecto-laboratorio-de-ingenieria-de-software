@@ -1,0 +1,67 @@
+@startuml diagrama_libreria
+entity "Usuario" {
+  *id_usuario : PK
+  --
+  tipo_usuario : enum (root, admin, cliente, visitante)
+  dni : string
+  nombre : string
+  correo : string
+  password : string
+  fecha_nacimiento : date
+  --
+  /* Campos extra para cliente/admin */
+}
+
+entity "Libro" {
+  *codigo_unico : PK
+  --
+  titulo : string
+  autor : string
+  isbn : string
+  precio : decimal
+  estado : enum (nuevo, usado)
+  es_historico_agotado : boolean
+}
+
+entity "Compra" {
+  *id_compra : PK
+  --
+  id_usuario : FK
+  fecha : datetime
+  estado_envio : enum (preparacion, enviado, entregado)
+  total : decimal
+}
+
+entity "Reserva" {
+  *id_reserva : PK
+  --
+  id_usuario : FK
+  fecha_creacion : datetime
+  fecha_expiracion : datetime
+}
+
+entity "Devolucion" {
+  *id_devolucion : PK
+  --
+  id_compra : FK
+  motivo : text
+  codigo_qr : string
+  fecha_solicitud : date
+}
+
+entity "GestionFinanciera" {
+  *id_cuenta : PK
+  --
+  id_usuario : FK
+  saldo : decimal
+  metodo_pago : string
+}
+
+Usuario ||--o{ Compra
+Usuario ||--o{ Reserva
+Usuario ||--|| GestionFinanciera
+Compra ||--|{ Devolucion
+Compra |o--|{ Libro : "contiene"
+Reserva |o--|{ Libro : "separa"
+
+@enduml
