@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Search, User, BookOpen, Sparkles, Clock, Filter, X, ChevronDown } from "lucide-react";
-import { Link } from "react-router";
+import { useState, useRef, useEffect } from "react";
+import { Search, User, BookOpen, Sparkles, Clock, Filter, X, ChevronDown, Bell, BellRing, CheckCircle, MessageCircle, Bot, Headset, Send } from "lucide-react";
+import { Link, useSearchParams } from "react-router";
 
 interface Book {
   id: number;
@@ -10,12 +10,54 @@ interface Book {
   cover: string;
   rating: number;
   isNew?: boolean;
+  arrivalDate?: string;
+}
+
+interface ChatMessage {
+  id: number;
+  text: string;
+  sender: 'user' | 'admin';
+  timestamp: string;
 }
 
 export function Home() {
+  const [searchParams] = useSearchParams();
+  const role = searchParams.get('role') || 'usuario';
+  const isVisitor = role === 'visitante';
+
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [showChatDropdown, setShowChatDropdown] = useState(false);
+  const [showAdminChat, setShowAdminChat] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 1,
+      text: "¡Hola! Bienvenido al chat de soporte de la Biblioteca Digital. ¿En qué podemos ayudarte?",
+      sender: 'admin',
+      timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of chat when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // Close chat dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chatDropdownRef.current && !chatDropdownRef.current.contains(event.target as Node)) {
+        setShowChatDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [filters, setFilters] = useState({
     category: "todas",
     condition: "todos",
@@ -23,16 +65,18 @@ export function Home() {
     availability: "todos"
   });
 
-  // Mock data - Libros recién añadidos
-  const newBooks: Book[] = [
+  // Preferencias del usuario (simulando datos del perfil)
+  const userPreferences = ["Ficción", "Ciencia", "Historia", "Poesía"];
+
+  // Mock data - Libros filtrados por preferencias del usuario
+  const preferenceBooks: Book[] = [
     {
       id: 1,
       title: "Cien Años de Soledad",
       author: "Gabriel García Márquez",
       category: "Ficción",
       cover: "https://images.unsplash.com/photo-1763571084092-a4306456166b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx2aW50YWdlJTIwYm9vayUyMGNvdmVyJTIwbGl0ZXJhdHVyZXxlbnwxfHx8fDE3NzI3MDAyMDB8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      rating: 4.8,
-      isNew: true
+      rating: 4.8
     },
     {
       id: 2,
@@ -40,8 +84,7 @@ export function Home() {
       author: "Antoine de Saint-Exupéry",
       category: "Ficción",
       cover: "https://images.unsplash.com/photo-1763768861268-cb6b54173dbf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjbGFzc2ljJTIwbm92ZWwlMjBib29rJTIwY292ZXJ8ZW58MXx8fHwxNzcyNzIyMjQ3fDA&ixlib=rb-4.1.0&q=80&w=1080",
-      rating: 4.9,
-      isNew: true
+      rating: 4.9
     },
     {
       id: 3,
@@ -49,8 +92,7 @@ export function Home() {
       author: "Stephen Hawking",
       category: "Ciencia",
       cover: "https://images.unsplash.com/photo-1725870475677-7dc91efe9f93?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzY2llbmNlJTIwYm9vayUyMGNvdmVyfGVufDF8fHx8MTc3MjgwNTQ5NXww&ixlib=rb-4.1.0&q=80&w=1080",
-      rating: 4.7,
-      isNew: true
+      rating: 4.7
     },
     {
       id: 4,
@@ -58,13 +100,8 @@ export function Home() {
       author: "Yuval Noah Harari",
       category: "Historia",
       cover: "https://images.unsplash.com/photo-1764509422504-f9aee0a1dd76?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoaXN0b3J5JTIwYm9vayUyMGNvdmVyfGVufDF8fHx8MTc3Mjc0NjUyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
-      rating: 4.6,
-      isNew: true
+      rating: 4.6
     },
-  ];
-
-  // Mock data - Recomendaciones personalizadas
-  const recommendedBooks: Book[] = [
     {
       id: 5,
       title: "Veinte Poemas de Amor",
@@ -83,26 +120,96 @@ export function Home() {
     },
     {
       id: 7,
-      title: "El Mundo de Sofía",
-      author: "Jostein Gaarder",
-      category: "Filosofía",
+      title: "Cosmos",
+      author: "Carl Sagan",
+      category: "Ciencia",
       cover: "https://images.unsplash.com/photo-1769729829047-7005ae8a5c8a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwaGlsb3NvcGh5JTIwYm9vayUyMGNvdmVyfGVufDF8fHx8MTc3MjgwOTY2OHww&ixlib=rb-4.1.0&q=80&w=1080",
       rating: 4.7
     },
     {
       id: 8,
-      title: "Historia del Arte",
-      author: "Ernst Gombrich",
-      category: "Arte",
+      title: "Canto General",
+      author: "Pablo Neruda",
+      category: "Poesía",
       cover: "https://images.unsplash.com/photo-1695987622803-9a9fb7b15e99?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhcnQlMjBib29rJTIwcGhvdG9ncmFwaHl8ZW58MXx8fHwxNzcyODA5NjY2fDA&ixlib=rb-4.1.0&q=80&w=1080",
       rating: 4.6
     },
   ];
 
+  // Mock data - Nuevos lanzamientos (solo visibles para suscriptores)
+  const newReleases: Book[] = [
+    {
+      id: 101,
+      title: "La Ciudad y los Perros",
+      author: "Mario Vargas Llosa",
+      category: "Ficción",
+      cover: "https://images.unsplash.com/photo-1763571084092-a4306456166b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx2aW50YWdlJTIwYm9vayUyMGNvdmVyJTIwbGl0ZXJhdHVyZXxlbnwxfHx8fDE3NzI3MDAyMDB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      rating: 4.9,
+      isNew: true,
+      arrivalDate: "12 Mar 2026"
+    },
+    {
+      id: 102,
+      title: "El Universo en una Cáscara de Nuez",
+      author: "Stephen Hawking",
+      category: "Ciencia",
+      cover: "https://images.unsplash.com/photo-1725870475677-7dc91efe9f93?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzY2llbmNlJTIwYm9vayUyMGNvdmVyfGVufDF8fHx8MTc3MjgwNTQ5NXww&ixlib=rb-4.1.0&q=80&w=1080",
+      rating: 4.8,
+      isNew: true,
+      arrivalDate: "11 Mar 2026"
+    },
+    {
+      id: 103,
+      title: "Rayuela",
+      author: "Julio Cortázar",
+      category: "Ficción",
+      cover: "https://images.unsplash.com/photo-1763768861268-cb6b54173dbf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjbGFzc2ljJTIwbm92ZWwlMjBib29rJTIwY292ZXJ8ZW58MXx8fHwxNzcyNzIyMjQ3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      rating: 4.7,
+      isNew: true,
+      arrivalDate: "10 Mar 2026"
+    },
+    {
+      id: 104,
+      title: "Homo Deus",
+      author: "Yuval Noah Harari",
+      category: "Historia",
+      cover: "https://images.unsplash.com/photo-1764509422504-f9aee0a1dd76?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoaXN0b3J5JTIwYm9vayUyMGNvdmVyfGVufDF8fHx8MTc3Mjc0NjUyM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      rating: 4.6,
+      isNew: true,
+      arrivalDate: "9 Mar 2026"
+    },
+  ];
+
+  const handleSubscribe = () => {
+    setIsSubscribed(true);
+  };
+
+  const handleSendMessage = () => {
+    if (chatMessage.trim() === '') return;
+    const newMsg: ChatMessage = {
+      id: chatMessages.length + 1,
+      text: chatMessage,
+      sender: 'user',
+      timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    };
+    setChatMessages(prev => [...prev, newMsg]);
+    setChatMessage("");
+
+    // Simulate admin auto-reply after 1.5s
+    setTimeout(() => {
+      const autoReply: ChatMessage = {
+        id: chatMessages.length + 2,
+        text: "Gracias por tu mensaje. Un administrador revisará tu consulta pronto. Por favor espera.",
+        sender: 'admin',
+        timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      };
+      setChatMessages(prev => [...prev, autoReply]);
+    }, 1500);
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Buscando:", searchQuery, "con filtros:", filters);
-    // Implementar lógica de búsqueda
   };
 
   const handleFilterChange = (filterName: string, value: string) => {
@@ -137,6 +244,11 @@ export function Home() {
           <div className="absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1" style={{ backgroundColor: '#606C38', color: '#FEFAE0' }}>
             <Sparkles className="w-3 h-3" />
             Nuevo
+          </div>
+        )}
+        {book.arrivalDate && (
+          <div className="absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: '#4A3728', color: '#FEFAE0' }}>
+            📅 {book.arrivalDate}
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -364,37 +476,262 @@ export function Home() {
           </p>
         </div>
 
-        {/* Sección: Recién Añadidos */}
+        {/* Sección 1: Libros Según Tus Preferencias */}
         <section className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <Clock className="w-6 h-6" style={{ color: '#606C38' }} />
-            <h2 style={{ color: '#4A3728' }}>Recién Añadidos al Catálogo</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <Sparkles className="w-6 h-6" style={{ color: '#606C38' }} />
+            <h2 style={{ color: '#4A3728' }}>Libros Según Tus Preferencias</h2>
+          </div>
+          <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D4A373' }}>
+            <p className="text-sm" style={{ color: '#4A3728' }}>
+              📚 Basado en tus intereses: {' '}
+              {userPreferences.map((pref, idx) => (
+                <span key={pref}>
+                  <span 
+                    className="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-1"
+                    style={{ backgroundColor: '#D4A373', color: '#4A3728' }}
+                  >
+                    {pref}
+                  </span>
+                  {idx < userPreferences.length - 1 ? ' ' : ''}
+                </span>
+              ))}
+            </p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {newBooks.map((book) => (
+            {preferenceBooks.map((book) => (
               <BookCard key={book.id} book={book} />
             ))}
           </div>
         </section>
 
-        {/* Sección: Recomendaciones Personalizadas */}
-        <section>
-          <div className="flex items-center gap-3 mb-6">
-            <Sparkles className="w-6 h-6" style={{ color: '#606C38' }} />
-            <h2 style={{ color: '#4A3728' }}>Recomendaciones Para Ti</h2>
-          </div>
-          <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D4A373' }}>
-            <p className="text-sm" style={{ color: '#4A3728' }}>
-              📚 Basado en tus intereses: <span className="font-medium">Ficción, Ciencia, Historia, Poesía</span>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {recommendedBooks.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
-        </section>
+        {/* Barra de Suscripción + Chat (Oculta para visitantes) */}
+        {!isVisitor && (
+          <section className="mb-12">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              {/* Botón de Suscripción estilo YouTube - Lado Izquierdo */}
+              <div className="flex-1">
+                {!isSubscribed ? (
+                  <button
+                    onClick={handleSubscribe}
+                    className="w-full sm:w-auto flex items-center gap-3 px-8 py-4 rounded-full font-semibold text-base transition-all hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer"
+                    style={{ 
+                      backgroundColor: '#4A3728',
+                      color: '#FEFAE0',
+                      boxShadow: '0 4px 15px rgba(74, 55, 40, 0.3)'
+                    }}
+                  >
+                    <BellRing className="w-6 h-6" />
+                    <span>Suscribirse a Novedades</span>
+                  </button>
+                ) : (
+                  <div
+                    className="w-full sm:w-auto flex items-center gap-3 px-8 py-4 rounded-full font-semibold text-base cursor-default"
+                    style={{ 
+                      backgroundColor: '#FFFFFF',
+                      color: '#606C38',
+                      border: '2px solid #606C38',
+                      boxShadow: '0 2px 8px rgba(96, 108, 56, 0.15)'
+                    }}
+                  >
+                    <CheckCircle className="w-6 h-6" />
+                    <span>Suscrito ✓</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Botón de Chat - Lado Derecho */}
+              <div className="relative" ref={chatDropdownRef}>
+                <button
+                  onClick={() => setShowChatDropdown(!showChatDropdown)}
+                  className="w-full sm:w-auto flex items-center gap-3 px-8 py-4 rounded-full font-semibold text-base transition-all hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer"
+                  style={{ 
+                    backgroundColor: '#606C38',
+                    color: '#FEFAE0',
+                    boxShadow: '0 4px 15px rgba(96, 108, 56, 0.3)'
+                  }}
+                >
+                  <MessageCircle className="w-6 h-6" />
+                  <span>Chat de Ayuda</span>
+                  <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${showChatDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown de opciones de chat */}
+                {showChatDropdown && (
+                  <div 
+                    className="absolute right-0 top-full mt-3 w-72 rounded-2xl shadow-2xl overflow-hidden z-50"
+                    style={{ 
+                      backgroundColor: '#FFFFFF',
+                      border: '2px solid #D4A373'
+                    }}
+                  >
+                    <div className="p-3" style={{ backgroundColor: '#4A3728' }}>
+                      <p className="text-sm font-medium" style={{ color: '#FEFAE0' }}>Selecciona una opción de chat</p>
+                    </div>
+                    
+                    {/* Opción: Chat con Administrador */}
+                    <button
+                      onClick={() => {
+                        setShowChatDropdown(false);
+                        setShowAdminChat(true);
+                      }}
+                      className="w-full flex items-center gap-4 p-4 transition-all hover:bg-opacity-50 cursor-pointer"
+                      style={{ borderBottom: '1px solid #FEFAE0' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEFAE0'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#D4A373' }}>
+                        <Headset className="w-6 h-6" style={{ color: '#4A3728' }} />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-sm" style={{ color: '#4A3728' }}>Chat con Administrador</p>
+                        <p className="text-xs" style={{ color: '#4A3728', opacity: 0.6 }}>Habla con un miembro del equipo</p>
+                      </div>
+                    </button>
+
+                    {/* Opción: Chat con IA */}
+                    <button
+                      className="w-full flex items-center gap-4 p-4 transition-all cursor-pointer opacity-70"
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEFAE0'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      onClick={() => setShowChatDropdown(false)}
+                    >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#606C38' }}>
+                        <Bot className="w-6 h-6" style={{ color: '#FEFAE0' }} />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-sm" style={{ color: '#4A3728' }}>Chat con IA</p>
+                        <p className="text-xs" style={{ color: '#4A3728', opacity: 0.6 }}>Próximamente disponible</p>
+                      </div>
+                      <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#D4A373', color: '#4A3728' }}>Pronto</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Sección 2: Nuevos Lanzamientos (SOLO si está suscrito) */}
+        {isSubscribed && (
+          <section className="mb-12">
+            <div 
+              className="p-6 rounded-2xl shadow-lg"
+              style={{ 
+                backgroundColor: '#FFFFFF',
+                border: '2px solid #606C38'
+              }}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Clock className="w-6 h-6" style={{ color: '#606C38' }} />
+                <h2 style={{ color: '#4A3728' }}>🆕 Nuevos Lanzamientos</h2>
+                <span 
+                  className="ml-auto px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1"
+                  style={{ backgroundColor: '#606C38', color: '#FEFAE0' }}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Exclusivo Suscriptores
+                </span>
+              </div>
+              <p className="text-sm mb-6" style={{ color: '#4A3728', opacity: 0.7 }}>
+                Los libros más recientes que han llegado a nuestra biblioteca
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                {newReleases.map((book) => (
+                  <BookCard key={book.id} book={book} />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </main>
+
+      {/* Modal de Chat con Administrador */}
+      {showAdminChat && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div 
+            className="w-full sm:w-[440px] sm:max-h-[600px] flex flex-col rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', height: '85vh', maxHeight: '600px' }}
+          >
+            {/* Chat Header */}
+            <div className="flex items-center gap-3 p-4 flex-shrink-0" style={{ backgroundColor: '#4A3728' }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: '#D4A373' }}>
+                <Headset className="w-5 h-5" style={{ color: '#4A3728' }} />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-sm" style={{ color: '#FEFAE0' }}>Chat con Administrador</p>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#7CB342' }} />
+                  <p className="text-xs" style={{ color: '#D4A373' }}>En línea</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAdminChat(false)}
+                className="p-2 rounded-full transition-all hover:opacity-80 cursor-pointer"
+                style={{ backgroundColor: 'rgba(212, 163, 115, 0.2)' }}
+              >
+                <X className="w-5 h-5" style={{ color: '#FEFAE0' }} />
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: '#FEFAE0' }}>
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] px-4 py-3 rounded-2xl ${msg.sender === 'user' ? 'rounded-br-md' : 'rounded-bl-md'}`}
+                    style={{
+                      backgroundColor: msg.sender === 'user' ? '#606C38' : '#FFFFFF',
+                      color: msg.sender === 'user' ? '#FEFAE0' : '#4A3728',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    <p className="text-sm leading-relaxed">{msg.text}</p>
+                    <p className="text-xs mt-1" style={{ opacity: 0.6 }}>{msg.timestamp}</p>
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-4 flex-shrink-0" style={{ backgroundColor: '#FFFFFF', borderTop: '1px solid #D4A373' }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex items-center gap-3"
+              >
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  placeholder="Escribe tu mensaje..."
+                  className="flex-1 px-4 py-3 rounded-full border-2 focus:outline-none transition-all text-sm"
+                  style={{ 
+                    backgroundColor: '#FEFAE0',
+                    borderColor: '#D4A373',
+                    color: '#4A3728'
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={chatMessage.trim() === ''}
+                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:scale-100"
+                  style={{ backgroundColor: '#606C38', color: '#FEFAE0' }}
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

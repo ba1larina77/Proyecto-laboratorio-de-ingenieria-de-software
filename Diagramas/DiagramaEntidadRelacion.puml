@@ -1,4 +1,4 @@
-@startuml
+@startuml diagrama de clases
 hide circle
 skinparam linetype ortho
 skinparam EntityBackgroundColor #F9F9F9

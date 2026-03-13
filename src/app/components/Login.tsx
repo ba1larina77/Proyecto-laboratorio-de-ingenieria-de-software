@@ -1,17 +1,48 @@
 import { useState } from "react";
-import { BookOpen, Lock, Mail } from "lucide-react";
-import { Link } from "react-router";
+import { BookOpen, Lock, Mail, Users } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login attempt with:", { email, password });
-    // Add your login logic here
-    // Simulando login exitoso
-    window.location.href = "/home";
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Guardar información del usuario (opcional, por si la necesitamos después)
+        localStorage.setItem('user', JSON.stringify(data.user));
+        // Redirigir al home con el rol
+        navigate(`/home?role=${data.user.role}`);
+      } else {
+        setError(data.message || "Error al iniciar sesión");
+      }
+    } catch (err) {
+      console.error("Error validando credenciales:", err);
+      setError("Error de conexión con el servidor. Por favor intenta más tarde.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVisitorLogin = () => {
+    navigate('/home?role=visitante');
   };
 
   return (
@@ -28,6 +59,12 @@ export function Login() {
               Ingresa a tu cuenta para explorar nuestra colección
             </p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm text-center">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Input */}
@@ -96,13 +133,14 @@ export function Login() {
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full py-3 rounded-lg font-medium transition-all hover:opacity-90 hover:shadow-lg"
+              disabled={isLoading}
+              className="w-full py-3 rounded-lg font-medium transition-all hover:opacity-90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ 
                 backgroundColor: '#4A3728',
                 color: '#FEFAE0'
               }}
             >
-              Iniciar Sesión
+              {isLoading ? "Validando..." : "Iniciar Sesión"}
             </button>
 
             {/* Divider */}
@@ -116,7 +154,7 @@ export function Login() {
             </div>
 
             {/* Register Button */}
-            <Link to="/register">
+            <Link to="/register" className="block w-full">
               <button
                 type="button"
                 className="w-full py-3 rounded-lg font-medium border-2 transition-all hover:shadow-md"
@@ -129,6 +167,20 @@ export function Login() {
                 Registrarse como Nuevo Usuario
               </button>
             </Link>
+
+            {/* Visitor Button */}
+            <button
+              type="button"
+              onClick={handleVisitorLogin}
+              className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-all hover:bg-opacity-10"
+              style={{ 
+                color: '#4A3728',
+                backgroundColor: 'rgba(74, 55, 40, 0.05)'
+              }}
+            >
+              <Users className="w-5 h-5" />
+              Entrar como Visitante
+            </button>
           </form>
 
           {/* Footer */}
