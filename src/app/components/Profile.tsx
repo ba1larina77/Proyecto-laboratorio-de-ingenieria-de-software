@@ -1,21 +1,57 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BookOpen, User, Mail, Lock, Calendar, MapPin, Home, FileText, ArrowLeft, Save } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { useShop } from "../store/ShopContext";
+import { Toast } from "./shop/Toast";
+
+function validateDate(v: string) {
+  if (!v) return "La fecha de nacimiento es obligatoria";
+  const date = new Date(v);
+  const today = new Date();
+  if (isNaN(date.getTime())) return "Fecha inválida";
+  if (date > today) return "La fecha no puede ser futura";
+  const age = today.getFullYear() - date.getFullYear() -
+    (today < new Date(today.getFullYear(), date.getMonth(), date.getDate()) ? 1 : 0);
+  if (age < 13) return "Debes tener al menos 13 años para registrarte";
+  if (age > 120) return "Fecha de nacimiento inválida";
+  return "";
+}
+
+function validatePassword(v: string) {
+  if (!v) return "La contraseña es obligatoria";
+  if (/\s/.test(v)) return "La contraseña no puede contener espacios en blanco";
+  if (v.length < 8) return "La contraseña debe tener al menos 8 caracteres";
+  if (!/[A-Z]/.test(v)) return "Debe incluir al menos una letra mayúscula";
+  if (!/[0-9]/.test(v)) return "Debe incluir al menos un número";
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(v))
+    return "Debe incluir al menos un carácter especial (!@#$%...)";
+  return "";
+}
 
 export function Profile() {
+  const navigate = useNavigate();
+  const { user, updateProfile, showToast } = useShop();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    dni: "12345678",
-    nombres: "Juan Carlos",
-    apellidos: "Pérez García",
-    fechaNacimiento: "1990-05-15",
-    lugarNacimiento: "Lima, Perú",
-    direccion: "Av. Principal 123, San Isidro, Lima",
-    genero: "masculino",
-    correo: "juan.perez@correo.com",
-    temasPreferencia: ["ficcion", "ciencia", "historia", "poesia"],
-    usuario: "juanperez",
+    dni: user?.dni || "",
+    nombres: user?.nombres || "",
+    apellidos: user?.apellidos || "",
+    fechaNacimiento: user?.fechaNacimiento || "",
+    lugarNacimiento: user?.lugarNacimiento || "",
+    direccion: user?.direccion || "",
+    genero: user?.genero || "",
+    correo: user?.email || "",
+    usuario: user?.username || "",
+    temasPreferencia: [] as string[],
   });
+
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -48,21 +84,41 @@ export function Profile() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Datos actualizados:", formData);
+    const dateError = validateDate(formData.fechaNacimiento);
+    if (dateError) {
+      showToast(dateError, "error");
+      return;
+    }
+    updateProfile({
+      dni: formData.dni,
+      nombres: formData.nombres,
+      apellidos: formData.apellidos,
+      name: `${formData.nombres} ${formData.apellidos}`,
+      fechaNacimiento: formData.fechaNacimiento,
+      lugarNacimiento: formData.lugarNacimiento,
+      direccion: formData.direccion,
+      genero: formData.genero,
+      username: formData.usuario,
+      email: formData.correo
+    });
     setIsEditing(false);
-    alert("Información actualizada exitosamente");
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("Las contraseñas no coinciden");
+    const passError = validatePassword(passwordData.newPassword);
+    if (passError) {
+      showToast(passError, "error");
       return;
     }
-    console.log("Contraseña actualizada");
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showToast("Las contraseñas no coinciden", "error");
+      return;
+    }
+    updateProfile({ password: passwordData.newPassword });
     setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
     setShowPasswordSection(false);
-    alert("Contraseña actualizada exitosamente");
+    showToast("Contraseña actualizada exitosamente", "success");
   };
 
   const InfoField = ({ label, value }: { label: string; value: string }) => (
@@ -79,7 +135,7 @@ export function Profile() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link to="/home">
+              <Link to="/">
                 <button className="p-2 rounded-lg hover:bg-opacity-10 transition-all" style={{ backgroundColor: '#4A3728', color: '#4A3728' }}>
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -131,9 +187,9 @@ export function Profile() {
                   <InfoField label="DNI" value={formData.dni} />
                   <InfoField label="Nombres" value={formData.nombres} />
                   <InfoField label="Apellidos" value={formData.apellidos} />
-                  <InfoField label="Fecha de Nacimiento" value={new Date(formData.fechaNacimiento).toLocaleDateString('es-ES')} />
+                  <InfoField label="Fecha de Nacimiento" value={formData.fechaNacimiento ? new Date(formData.fechaNacimiento).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : ""} />
                   <InfoField label="Lugar de Nacimiento" value={formData.lugarNacimiento} />
-                  <InfoField label="Género" value={formData.genero.charAt(0).toUpperCase() + formData.genero.slice(1)} />
+                  <InfoField label="Género" value={formData.genero ? formData.genero.charAt(0).toUpperCase() + formData.genero.slice(1) : ""} />
                   <div className="sm:col-span-2">
                     <InfoField label="Dirección" value={formData.direccion} />
                   </div>
@@ -161,6 +217,7 @@ export function Profile() {
               </div>
 
               {/* Preferencias */}
+              {user?.role === 'cliente' && (
               <div>
                 <h3 className="mb-4 pb-2 border-b" style={{ color: '#4A3728', borderColor: '#D4A373' }}>
                   Preferencias de Lectura
@@ -177,6 +234,7 @@ export function Profile() {
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Sección de Cambio de Contraseña */}
               {showPasswordSection && (
@@ -217,6 +275,20 @@ export function Profile() {
                           className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                           style={{ backgroundColor: '#FFFFFF', borderColor: '#D4A373', color: '#4A3728' }}
                         />
+                      </div>
+                      <div className="text-xs space-y-1 mt-2 mx-1" style={{ color: '#4A3728', opacity: 0.8 }}>
+                        <p className={passwordData.newPassword.length >= 8 ? "text-emerald-600 font-bold" : ""}>
+                          ✓ Mínimo 8 caracteres
+                        </p>
+                        <p className={/[A-Z]/.test(passwordData.newPassword) ? "text-emerald-600 font-bold" : ""}>
+                          ✓ Al menos una letra mayúscula
+                        </p>
+                        <p className={/[0-9]/.test(passwordData.newPassword) ? "text-emerald-600 font-bold" : ""}>
+                          ✓ Al menos un número
+                        </p>
+                        <p className={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordData.newPassword) ? "text-emerald-600 font-bold" : ""}>
+                          ✓ Al menos un carácter especial
+                        </p>
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -278,9 +350,9 @@ export function Profile() {
                         name="dni"
                         type="text"
                         value={formData.dni}
-                        onChange={handleChange}
-                        className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
-                        style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
+                        disabled
+                        className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none opacity-60 cursor-not-allowed"
+                        style={{ backgroundColor: '#F5EDD3', borderColor: '#D4A373', color: '#4A3728' }}
                       />
                     </div>
                   </div>
@@ -295,6 +367,7 @@ export function Profile() {
                         type="text"
                         value={formData.nombres}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -311,6 +384,7 @@ export function Profile() {
                         type="text"
                         value={formData.apellidos}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -325,8 +399,10 @@ export function Profile() {
                         id="fechaNacimiento"
                         name="fechaNacimiento"
                         type="date"
+                        max={new Date().toISOString().split("T")[0]}
                         value={formData.fechaNacimiento}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -343,6 +419,7 @@ export function Profile() {
                         type="text"
                         value={formData.lugarNacimiento}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -379,6 +456,7 @@ export function Profile() {
                         type="text"
                         value={formData.direccion}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -402,9 +480,9 @@ export function Profile() {
                         name="correo"
                         type="email"
                         value={formData.correo}
-                        onChange={handleChange}
-                        className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
-                        style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
+                        disabled
+                        className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none opacity-60 cursor-not-allowed"
+                        style={{ backgroundColor: '#F5EDD3', borderColor: '#D4A373', color: '#4A3728' }}
                       />
                     </div>
                   </div>
@@ -419,6 +497,7 @@ export function Profile() {
                         type="text"
                         value={formData.usuario}
                         onChange={handleChange}
+                        required
                         className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
                         style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
                       />
@@ -428,6 +507,7 @@ export function Profile() {
               </div>
 
               {/* Preferencias */}
+              {user?.role === 'cliente' && (
               <div>
                 <h3 className="mb-4 pb-2 border-b" style={{ color: '#4A3728', borderColor: '#D4A373' }}>
                   Preferencias de Lectura
@@ -460,6 +540,7 @@ export function Profile() {
                   </select>
                 </div>
               </div>
+              )}
 
               {/* Botones de Acción */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -484,6 +565,7 @@ export function Profile() {
           )}
         </div>
       </main>
+      <Toast />
     </div>
   );
 }
