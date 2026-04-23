@@ -63,6 +63,12 @@ export function Catalog() {
   const role = user?.role ?? "visitante";
 
   const [search, setSearch]       = useState("");
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("biblion_search_history");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
   const [category, setCategory]   = useState("Todos");
   const [sortBy, setSortBy]       = useState("relevance");
   const [isGrid, setIsGrid]       = useState(true);
@@ -94,10 +100,27 @@ export function Catalog() {
 
   const sorted = sortBooks(filtered, sortBy);
 
+  function saveHistory(query: string) {
+    const q = query.trim();
+    if (!q) return;
+    setSearchHistory(prev => {
+      const next = [q, ...prev.filter(i => i !== q)].slice(0, 5);
+      localStorage.setItem("biblion_search_history", JSON.stringify(next));
+      return next;
+    });
+  }
+
   function applySuggestion(s: ReturnType<typeof getSuggestions>[0]) {
     if (s.type === "category") { setCategory(s.text); setSearch(""); }
-    else setSearch(s.text);
+    else { setSearch(s.text); saveHistory(s.text); }
     setShowSugg(false);
+  }
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      saveHistory(search);
+      setShowSugg(false);
+    }
   }
 
   // Determina si los botones de acción deben estar deshabilitados
@@ -112,7 +135,7 @@ export function Catalog() {
     <div>
       <div className="mb-7">
         <h1 className="text-3xl font-bold mb-1" style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728" }}>
-          Catálogo de libros
+          {user?.suscritoNoticias ? "Mi Dashboard" : "Catálogo de libros"}
         </h1>
         <p className="text-sm" style={{ color: "#6B5344", opacity: 0.8 }}>
           {sorted.length} títulos disponibles
@@ -139,6 +162,7 @@ export function Catalog() {
             type="text" value={search}
             onChange={e => { setSearch(e.target.value); setShowSugg(true); }}
             onFocus={() => setShowSugg(true)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Buscar por título, autor o ISBN…"
             className="w-full pl-10 pr-9 py-2.5 rounded-full text-sm outline-none transition-all"
             style={{ border: "1.5px solid #E8C99A", background: "#FEFAE0", color: "#4A3728" }}
@@ -152,20 +176,44 @@ export function Catalog() {
             </button>
           )}
 
-          {/* Dropdown sugerencias */}
-          {showSugg && suggestions.length > 0 && (
+          {/* Dropdown sugerencias O Historial */}
+          {showSugg && (
             <div className="absolute top-full left-0 right-0 mt-1 rounded-xl z-50 overflow-hidden"
               style={{ background: "#fff", boxShadow: "0 8px 32px rgba(74,55,40,0.18)", border: "1px solid #E8C99A" }}>
-              {(["title", "author", "category"] as const).map(type => {
-                const group = suggestions.filter(s => s.type === type);
-                if (!group.length) return null;
-                const m = TYPE_META[type];
-                return (
-                  <div key={type}>
-                    <p className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide"
-                      style={{ color: m.color, background: "#F5EDD3" }}>
-                      {m.icon} {m.label}
-                    </p>
+              
+              {/* Historial de búsqueda */}
+              {!search && searchHistory.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 text-xs font-semibold tracking-wide flex justify-between items-center"
+                    style={{ color: "#6B5344", background: "#F5EDD3" }}>
+                    <span>🕒 Búsquedas recientes</span>
+                    <button onClick={(e) => { e.stopPropagation(); setSearchHistory([]); localStorage.removeItem("biblion_search_history"); }}
+                      className="hover:underline opacity-80">Borrar</button>
+                  </div>
+                  {searchHistory.map((h, i) => (
+                    <button key={i} onClick={() => { setSearch(h); saveHistory(h); setShowSugg(false); }}
+                      className="w-full text-left px-5 py-2.5 text-sm flex items-center gap-3 transition-all hover:opacity-80"
+                      style={{ background: "#fff", color: "#4A3728" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#F5EDD3")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
+                      <span>{h}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Sugerencias en vivo */}
+              {search && suggestions.length > 0 && (
+                <>{(["title", "author", "category"] as const).map(type => {
+                  const group = suggestions.filter(s => s.type === type);
+                  if (!group.length) return null;
+                  const m = TYPE_META[type];
+                  return (
+                    <div key={type}>
+                      <p className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide"
+                        style={{ color: m.color, background: "#F5EDD3" }}>
+                        {m.icon} {m.label}
+                      </p>
                     {group.map((s, i) => (
                       <button key={i} onClick={() => applySuggestion(s)}
                         className="w-full text-left px-5 py-2.5 text-sm flex items-center gap-3 transition-all hover:opacity-80"
@@ -178,9 +226,10 @@ export function Catalog() {
                         <span>{s.text}</span>
                       </button>
                     ))}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}</>
+              )}
             </div>
           )}
 
@@ -270,31 +319,60 @@ export function Catalog() {
         </div>
       )}
 
-      {/* ── GRID ── */}
-      {sorted.length > 0 && isGrid && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {sorted.map(book => (
-            <BookCard key={book.id} book={book}
-              canBuy={canBuy} actionMsg={actionMsg}
-              onBuy={() => addToCart(book.id)}
-              onReserve={() => addReservation(book.id)}
-              onDetail={() => setSelectedBook(book)} />
-          ))}
-        </div>
-      )}
+      {/* ── SECCIONES DEL CATÁLOGO ── */}
+      {(() => {
+        if (sorted.length === 0) return null;
 
-      {/* ── LIST ── */}
-      {sorted.length > 0 && !isGrid && (
-        <div className="space-y-3">
-          {sorted.map(book => (
-            <BookRow key={book.id} book={book}
-              canBuy={canBuy} actionMsg={actionMsg}
-              onBuy={() => addToCart(book.id)}
-              onReserve={() => addReservation(book.id)}
-              onDetail={() => setSelectedBook(book)} />
-          ))}
-        </div>
-      )}
+        const isSubscribed = user?.suscritoNoticias === true;
+        
+        // Render helper para la grid/lista
+        const renderBooks = (bookList: Book[]) => (
+          isGrid ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {bookList.map(book => (
+                <BookCard key={book.id} book={book} canBuy={canBuy} actionMsg={actionMsg}
+                  onBuy={() => addToCart(book.id)} onReserve={() => addReservation(book.id)}
+                  onDetail={() => setSelectedBook(book)} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bookList.map(book => (
+                <BookRow key={book.id} book={book} canBuy={canBuy} actionMsg={actionMsg}
+                  onBuy={() => addToCart(book.id)} onReserve={() => addReservation(book.id)}
+                  onDetail={() => setSelectedBook(book)} />
+              ))}
+            </div>
+          )
+        );
+
+        if (isSubscribed) {
+          const subscriptionBooks = sorted.filter(b => b.isNew);
+          
+          return (
+            <div className="space-y-10">
+              {subscriptionBooks.length > 0 && (
+                <section>
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b" style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728", borderColor: "#E8C99A" }}>
+                    ⭐ Suscripción (Nuevos Ingresos)
+                  </h2>
+                  {renderBooks(subscriptionBooks)}
+                </section>
+              )}
+              <section>
+                <h2 className="text-2xl font-bold mb-4 pb-2 border-b" style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728", borderColor: "#E8C99A" }}>
+                  📚 Preferencias
+                </h2>
+                {renderBooks(sorted)}
+              </section>
+            </div>
+          );
+        }
+
+        // Usuario no suscrito (comportamiento normal)
+        return renderBooks(sorted);
+      })()}
+
 
       {/* Modal de detalle */}
       {selectedBook && (

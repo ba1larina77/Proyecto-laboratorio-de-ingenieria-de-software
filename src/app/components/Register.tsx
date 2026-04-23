@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BookOpen, User, Mail, Lock, Calendar,
   MapPin, Home, FileText, Tag, Eye, EyeOff,
@@ -131,21 +131,38 @@ export function Register() {
     setErrors(prev => ({ ...prev, [name]: newErrors[name] }));
   }
 
-  function handleTemasChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const options = e.target.options;
-    const selected: string[] = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) selected.push(options[i].value);
-    }
-    const updated = { ...formData, temasPreferencia: selected };
-    setFormData(updated);
-    if (touched.temasPreferencia) {
-      setErrors(prev => ({
-        ...prev,
-        temasPreferencia: selected.length === 0 ? "Selecciona al menos un tema" : "",
-      }));
-    }
+  function toggleTema(tema: string) {
+    setFormData(prev => {
+      const selected = prev.temasPreferencia.includes(tema)
+        ? prev.temasPreferencia.filter(t => t !== tema)
+        : [...prev.temasPreferencia, tema];
+      
+      const newErrors = validate({ ...prev, temasPreferencia: selected });
+      setErrors(curr => ({ ...curr, temasPreferencia: newErrors.temasPreferencia }));
+      
+      return { ...prev, temasPreferencia: selected };
+    });
+    setTouched(prev => ({ ...prev, temasPreferencia: true }));
   }
+
+  // Effect para componer fechaNacimiento desde los selects
+  const [bDay, setBDay] = useState("");
+  const [bMonth, setBMonth] = useState("");
+  const [bYear, setBYear] = useState("");
+
+  useEffect(() => {
+    if (bDay && bMonth && bYear) {
+      const dateStr = `${bYear}-${bMonth.padStart(2, "0")}-${bDay.padStart(2, "0")}`;
+      setFormData(prev => ({ ...prev, fechaNacimiento: dateStr }));
+      if (touched.fechaNacimiento) {
+        const newErrors = validate({ ...formData, fechaNacimiento: dateStr });
+        setErrors(prev => ({ ...prev, fechaNacimiento: newErrors.fechaNacimiento }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, fechaNacimiento: "" }));
+    }
+  }, [bDay, bMonth, bYear]);
+
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -174,6 +191,7 @@ export function Register() {
         correo:           formData.correo,
         usuario:          formData.usuario,
         contrasena:       formData.contrasena,
+        temasPreferencia: formData.temasPreferencia,
       });
 
       setLoading(false);
@@ -320,24 +338,38 @@ export function Register() {
                 error={touched.dni ? errors.dni : ""}
                 onChange={handleChange} onBlur={handleBlur as any} />
 
-              {/* Fecha de Nacimiento */}
-              <div className="space-y-1.5">
+              {/* Fecha de Nacimiento (Selects) */}
+              <div className="space-y-1.5 md:col-span-2">
                 <label className="block text-sm font-medium" style={{ color: "#4A3728" }}>
                   Fecha de Nacimiento <span style={{ color: "#C0392B" }}>*</span>
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5"
-                    style={{ color: touched.fechaNacimiento && errors.fechaNacimiento ? "#C0392B" : "#D4A373" }} />
-                  <input id="fechaNacimiento" name="fechaNacimiento" type="date"
-                    value={formData.fechaNacimiento}
-                    max={new Date().toISOString().split("T")[0]}
-                    onChange={handleChange} onBlur={handleBlur as any}
-                    className="w-full pl-11 pr-4 py-3 rounded-lg border-2 focus:outline-none text-sm"
-                    style={{
-                      backgroundColor: "#FEFAE0",
-                      borderColor: touched.fechaNacimiento && errors.fechaNacimiento ? "#C0392B" : "#D4A373",
-                      color: "#4A3728",
-                    }} />
+                <div className="flex gap-2">
+                  <select value={bDay} onChange={e => { setBDay(e.target.value); setTouched(p => ({ ...p, fechaNacimiento: true })); }}
+                    className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                    style={{ backgroundColor: "#FEFAE0", borderColor: touched.fechaNacimiento && errors.fechaNacimiento ? "#C0392B" : "#D4A373", color: "#4A3728" }}>
+                    <option value="">Día</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={d.toString()}>{d}</option>
+                    ))}
+                  </select>
+                  
+                  <select value={bMonth} onChange={e => { setBMonth(e.target.value); setTouched(p => ({ ...p, fechaNacimiento: true })); }}
+                    className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                    style={{ backgroundColor: "#FEFAE0", borderColor: touched.fechaNacimiento && errors.fechaNacimiento ? "#C0392B" : "#D4A373", color: "#4A3728" }}>
+                    <option value="">Mes</option>
+                    {["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"].map((m, i) => (
+                      <option key={i + 1} value={(i + 1).toString()}>{m}</option>
+                    ))}
+                  </select>
+
+                  <select value={bYear} onChange={e => { setBYear(e.target.value); setTouched(p => ({ ...p, fechaNacimiento: true })); }}
+                    className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                    style={{ backgroundColor: "#FEFAE0", borderColor: touched.fechaNacimiento && errors.fechaNacimiento ? "#C0392B" : "#D4A373", color: "#4A3728" }}>
+                    <option value="">Año</option>
+                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - 13 - i).map(y => (
+                      <option key={y} value={y.toString()}>{y}</option>
+                    ))}
+                  </select>
                 </div>
                 {touched.fechaNacimiento && errors.fechaNacimiento && (
                   <FieldErr msg={errors.fechaNacimiento} />
@@ -508,36 +540,31 @@ export function Register() {
               style={{ color: "#4A3728", borderColor: "#D4A373" }}>
               Preferencias de Lectura
             </h3>
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <label className="block text-sm font-medium" style={{ color: "#4A3728" }}>
-                Temas de Preferencia <span style={{ color: "#C0392B" }}>*</span>{" "}
-                <span className="font-normal text-xs" style={{ color: "#6B5344" }}>
-                  (Ctrl/Cmd para seleccionar varios)
-                </span>
+                Temas de Preferencia <span style={{ color: "#C0392B" }}>*</span>
               </label>
-              <div className="relative">
-                <Tag className="absolute left-3 top-3 w-5 h-5 z-10" style={{ color: "#D4A373" }} />
-                <select id="temasPreferencia" multiple value={formData.temasPreferencia}
-                  onChange={handleTemasChange}
-                  onBlur={() => setTouched(p => ({ ...p, temasPreferencia: true }))}
-                  className="w-full pl-11 pr-4 py-3 rounded-lg border-2 focus:outline-none min-h-32 text-sm"
-                  style={{
-                    backgroundColor: "#FEFAE0",
-                    borderColor: touched.temasPreferencia && errors.temasPreferencia ? "#C0392B" : "#D4A373",
-                    color: "#4A3728",
-                  }}>
-                  {["Ficción","No Ficción","Ciencia","Historia","Tecnología",
-                    "Arte","Filosofía","Poesía","Biografía","Infantil","Juvenil","Novela Gráfica"
-                  ].map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
-                </select>
+              <div className="flex flex-wrap gap-2">
+                {["Ficción","No Ficción","Ciencia","Historia","Tecnología",
+                  "Arte","Filosofía","Poesía","Biografía","Infantil","Juvenil","Novela Gráfica"
+                ].map(t => {
+                  const val = t.toLowerCase();
+                  const isSelected = formData.temasPreferencia.includes(val);
+                  return (
+                    <button type="button" key={t} onClick={() => toggleTema(val)}
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+                      style={{
+                        backgroundColor: isSelected ? "#606C38" : "#FEFAE0",
+                        color: isSelected ? "#FEFAE0" : "#4A3728",
+                        border: `1.5px solid ${isSelected ? "#606C38" : "#E8C99A"}`
+                      }}>
+                      {t}
+                    </button>
+                  );
+                })}
               </div>
               {touched.temasPreferencia && errors.temasPreferencia && (
                 <FieldErr msg={errors.temasPreferencia} />
-              )}
-              {formData.temasPreferencia.length > 0 && (
-                <p className="text-xs" style={{ color: "#4A3728", opacity: 0.6 }}>
-                  Seleccionados: {formData.temasPreferencia.join(", ")}
-                </p>
               )}
             </div>
 

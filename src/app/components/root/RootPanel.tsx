@@ -21,9 +21,9 @@ function validateAdmin(f: typeof emptyForm) {
 
 export function RootPanel() {
   // ← Conexión real al contexto
-  const { registerAdmin, adminsList, toggleAdminStatus, updateProfile } = useShop();
+  const { registerAdmin, adminsList, toggleAdminStatus, usersList, toggleUserStatus, updateProfile } = useShop();
 
-  const [tab, setTab] = useState<"admins" | "create" | "credentials">("admins");
+  const [tab, setTab] = useState<"admins" | "users" | "create" | "credentials">("admins");
   const [form, setForm] = useState({ ...emptyForm });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -179,6 +179,22 @@ export function RootPanel() {
         </div>
       )}
 
+      {/* Sub-navegación Cuentas */}
+      {(tab === "admins" || tab === "users") && (
+        <div className="flex gap-4 mb-5 border-b" style={{ borderColor: "#E8C99A" }}>
+          <button onClick={() => setTab("admins")}
+            className={`pb-2 text-sm font-bold border-b-2 transition-all ${tab === "admins" ? "" : "border-transparent opacity-60"}`}
+            style={{ borderColor: tab === "admins" ? "#4A3728" : "transparent", color: "#4A3728" }}>
+            Administradores
+          </button>
+          <button onClick={() => setTab("users")}
+            className={`pb-2 text-sm font-bold border-b-2 transition-all ${tab === "users" ? "" : "border-transparent opacity-60"}`}
+            style={{ borderColor: tab === "users" ? "#4A3728" : "transparent", color: "#4A3728" }}>
+            Usuarios (Clientes)
+          </button>
+        </div>
+      )}
+
       {/* ── TABLA DE ADMINISTRADORES ── */}
       {tab === "admins" && (
         <div className="rounded-2xl overflow-hidden" style={{ boxShadow: "0 3px 16px rgba(74,55,40,0.08)" }}>
@@ -222,6 +238,61 @@ export function RootPanel() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── TABLA DE USUARIOS ── */}
+      {tab === "users" && (
+        <div className="rounded-2xl overflow-hidden" style={{ boxShadow: "0 3px 16px rgba(74,55,40,0.08)" }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: "#606C38", color: "#FEFAE0" }}>
+                {["ID", "Nombre", "Usuario", "Correo", "Creado", "Estado", "Acciones"].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {usersList.map((a, i) => (
+                <tr key={a.id} style={{ background: i % 2 === 0 ? "#fff" : "#FEFAE0" }}>
+                  <td className="px-4 py-3">
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-lg" style={{ background: "#F5EDD3", color: "#4A3728" }}>
+                      {a.id}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-medium" style={{ color: "#4A3728" }}>
+                    {a.nombres} {a.apellidos}
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono" style={{ color: "#6B5344" }}>{a.usuario}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#6B5344" }}>{a.correo}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#6B5344" }}>
+                    {a.createdAt.toLocaleDateString("es-CO")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: a.active ? "rgba(96,108,56,0.1)" : "rgba(192,57,43,0.1)", color: a.active ? "#606C38" : "#C0392B" }}>
+                      {a.active ? "Activo" : "Inactivo"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => toggleUserStatus(a.id)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
+                      style={{ background: a.active ? "rgba(192,57,43,0.08)" : "rgba(96,108,56,0.08)", color: a.active ? "#C0392B" : "#606C38" }}>
+                      {a.active ? "Desactivar" : "Activar"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {usersList.length === 0 && (
+                <tr style={{ background: "#fff" }}>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "#6B5344" }}>
+                    No hay usuarios registrados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

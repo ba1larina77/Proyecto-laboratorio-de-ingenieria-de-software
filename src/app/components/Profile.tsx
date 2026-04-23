@@ -49,9 +49,22 @@ export function Profile() {
     genero: user?.genero || "",
     correo: user?.email || "",
     usuario: user?.username || "",
-    temasPreferencia: [] as string[],
+    temasPreferencia: user?.temasPreferencia || [],
   });
 
+  const initialDate = user?.fechaNacimiento || "";
+  const [bDay, setBDay] = useState(initialDate ? initialDate.split("-")[2] : "");
+  const [bMonth, setBMonth] = useState(initialDate ? parseInt(initialDate.split("-")[1], 10).toString() : "");
+  const [bYear, setBYear] = useState(initialDate ? initialDate.split("-")[0] : "");
+
+  useEffect(() => {
+    if (bDay && bMonth && bYear) {
+      const dateStr = `${bYear}-${bMonth.padStart(2, "0")}-${bDay.padStart(2, "0")}`;
+      setFormData(prev => ({ ...prev, fechaNacimiento: dateStr }));
+    } else {
+      setFormData(prev => ({ ...prev, fechaNacimiento: "" }));
+    }
+  }, [bDay, bMonth, bYear]);
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -66,16 +79,14 @@ export function Profile() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleTemasChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const options = e.target.options;
-    const selected: string[] = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selected.push(options[i].value);
-      }
-    }
-    setFormData(prev => ({ ...prev, temasPreferencia: selected }));
-  };
+  function toggleTema(tema: string) {
+    setFormData(prev => {
+      const selected = prev.temasPreferencia.includes(tema)
+        ? prev.temasPreferencia.filter(t => t !== tema)
+        : [...prev.temasPreferencia, tema];
+      return { ...prev, temasPreferencia: selected };
+    });
+  }
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -99,7 +110,8 @@ export function Profile() {
       direccion: formData.direccion,
       genero: formData.genero,
       username: formData.usuario,
-      email: formData.correo
+      email: formData.correo,
+      temasPreferencia: formData.temasPreferencia
     });
     setIsEditing(false);
   };
@@ -391,21 +403,35 @@ export function Profile() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <label htmlFor="fechaNacimiento" className="block text-sm" style={{ color: '#4A3728' }}>Fecha de Nacimiento</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#D4A373' }} />
-                      <input
-                        id="fechaNacimiento"
-                        name="fechaNacimiento"
-                        type="date"
-                        max={new Date().toISOString().split("T")[0]}
-                        value={formData.fechaNacimiento}
-                        onChange={handleChange}
-                        required
-                        className="w-full pl-12 pr-4 py-3 rounded-lg border-2 focus:outline-none"
-                        style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
-                      />
+                    <div className="flex gap-2">
+                      <select value={bDay} onChange={e => setBDay(e.target.value)}
+                        className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                        style={{ backgroundColor: "#FEFAE0", borderColor: "#D4A373", color: "#4A3728" }}>
+                        <option value="">Día</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                          <option key={d} value={d.toString()}>{d}</option>
+                        ))}
+                      </select>
+                      
+                      <select value={bMonth} onChange={e => setBMonth(e.target.value)}
+                        className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                        style={{ backgroundColor: "#FEFAE0", borderColor: "#D4A373", color: "#4A3728" }}>
+                        <option value="">Mes</option>
+                        {["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"].map((m, i) => (
+                          <option key={i + 1} value={(i + 1).toString()}>{m}</option>
+                        ))}
+                      </select>
+
+                      <select value={bYear} onChange={e => setBYear(e.target.value)}
+                        className="flex-1 pl-3 pr-8 py-3 rounded-lg border-2 focus:outline-none appearance-none text-sm"
+                        style={{ backgroundColor: "#FEFAE0", borderColor: "#D4A373", color: "#4A3728" }}>
+                        <option value="">Año</option>
+                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - 13 - i).map(y => (
+                          <option key={y} value={y.toString()}>{y}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -514,30 +540,27 @@ export function Profile() {
                 </h3>
                 <div className="space-y-2">
                   <label htmlFor="temasPreferencia" className="block text-sm" style={{ color: '#4A3728' }}>
-                    Temas de Preferencia (Mantén presionado Ctrl/Cmd para seleccionar múltiples)
+                    Temas de Preferencia
                   </label>
-                  <select
-                    id="temasPreferencia"
-                    name="temasPreferencia"
-                    value={formData.temasPreferencia}
-                    onChange={handleTemasChange}
-                    multiple
-                    className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none min-h-32"
-                    style={{ backgroundColor: '#FEFAE0', borderColor: '#D4A373', color: '#4A3728' }}
-                  >
-                    <option value="ficcion">Ficción</option>
-                    <option value="no-ficcion">No Ficción</option>
-                    <option value="ciencia">Ciencia</option>
-                    <option value="historia">Historia</option>
-                    <option value="tecnologia">Tecnología</option>
-                    <option value="arte">Arte</option>
-                    <option value="filosofia">Filosofía</option>
-                    <option value="poesia">Poesía</option>
-                    <option value="biografia">Biografía</option>
-                    <option value="infantil">Infantil</option>
-                    <option value="juvenil">Juvenil</option>
-                    <option value="novela-grafica">Novela Gráfica</option>
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {["Ficción","No Ficción","Ciencia","Historia","Tecnología",
+                      "Arte","Filosofía","Poesía","Biografía","Infantil","Juvenil","Novela Gráfica"
+                    ].map(t => {
+                      const val = t.toLowerCase();
+                      const isSelected = formData.temasPreferencia.includes(val);
+                      return (
+                        <button type="button" key={t} onClick={() => toggleTema(val)}
+                          className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+                          style={{
+                            backgroundColor: isSelected ? "#606C38" : "#FEFAE0",
+                            color: isSelected ? "#FEFAE0" : "#4A3728",
+                            border: `1.5px solid ${isSelected ? "#606C38" : "#E8C99A"}`
+                          }}>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               )}

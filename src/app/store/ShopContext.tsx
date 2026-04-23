@@ -25,6 +25,7 @@ export interface SessionUser {
   genero?: string;
   suscritoNoticias?: boolean;
   isProfileComplete?: boolean;
+  temasPreferencia?: string[];
 }
 
 export interface ChatMessage {
@@ -46,7 +47,7 @@ export interface ChatSession {
 export const DEMO_USERS: (SessionUser & { password: string })[] = [
   {
     id: "U-ROOT-001", name: "Administrador Root", email: "root@biblion.co",
-    username: "root", password: "root1234", role: "root", balance: 0,
+    username: "root", password: "Root1234*", role: "root", balance: 0,
     nombres: "Administrador", apellidos: "Root", dni: "0000000000"
   },
   {
@@ -142,12 +143,15 @@ interface ShopContextType {
     fechaNacimiento: string; lugarNacimiento: string;
     direccion: string; genero: string;
     correo: string; usuario: string; contrasena: string;
+    temasPreferencia: string[];
   }) => { success: boolean; error?: string };
   registerAdmin: (data: {
     correo: string; usuario: string; contrasena: string;
   }) => { success: boolean; id?: string; error?: string };
   adminsList: { id: string; nombres: string; apellidos: string; correo: string; usuario: string; active: boolean; createdAt: Date; }[];
+  usersList: { id: string; nombres: string; apellidos: string; correo: string; usuario: string; active: boolean; createdAt: Date; }[];
   toggleAdminStatus: (id: string) => void;
+  toggleUserStatus: (id: string) => void;
   updateBalance: (amount: number) => void;
   updateProfile: (data: Partial<SessionUser & { password?: string }>) => { success: boolean; error?: string };
 
@@ -257,6 +261,13 @@ function loadUsers(): (SessionUser & { password: string })[] {
     const raw = localStorage.getItem(LS_USERS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as (SessionUser & { password: string })[];
+      
+      // Forzar reset de credenciales root en localStorage por pérdida de acceso
+      const rootUser = parsed.find(u => u.username === "root");
+      if (rootUser) {
+        rootUser.password = "Root1234*";
+      }
+
       const merged = parsed.slice();
       for (const d of DEMO_USERS) {
         if (!merged.find(m => m.id === d.id)) merged.push(d);
@@ -450,6 +461,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     fechaNacimiento: string; lugarNacimiento: string;
     direccion: string; genero: string;
     correo: string; usuario: string; contrasena: string;
+    temasPreferencia: string[];
   }) => {
     // Verificar duplicados de correo o usuario
     const emailTaken = registeredUsers.find(
@@ -481,6 +493,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       direccion: data.direccion,
       genero: data.genero,
       suscritoNoticias: false,
+      temasPreferencia: data.temasPreferencia,
     };
 
     setRegisteredUsers(prev => {
@@ -541,7 +554,29 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       }));
   }, [registeredUsers]);
 
+  const usersList = useMemo(() => {
+    return registeredUsers
+      .filter(u => u.role === "cliente")
+      .map(u => ({
+        id: u.id,
+        nombres: u.nombres || "(Pendiente)",
+        apellidos: u.apellidos || "",
+        correo: u.email,
+        usuario: u.username,
+        active: (u as any).active ?? true,
+        createdAt: new Date()
+      }));
+  }, [registeredUsers]);
+
   const toggleAdminStatus = useCallback((id: string) => {
+    setRegisteredUsers(prev => {
+      const next = prev.map(u => u.id === id ? { ...u, active: !((u as any).active ?? true) } : u);
+      saveUsers(next);
+      return next;
+    });
+  }, []);
+
+  const toggleUserStatus = useCallback((id: string) => {
     setRegisteredUsers(prev => {
       const next = prev.map(u => u.id === id ? { ...u, active: !((u as any).active ?? true) } : u);
       saveUsers(next);
@@ -847,7 +882,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       reservationHistory, cancellations,
       chats, sendMessageToAdmin, resolveChat,
       toast, toastType, showToast,
-      adminsList, toggleAdminStatus,
+      adminsList, usersList, toggleAdminStatus, toggleUserStatus,
     }}>
       {children}
     </ShopContext.Provider>
