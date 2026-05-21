@@ -91,12 +91,11 @@ export function Shop() {
     setBirthdayCoupon(coupon);
     setBirthdayModalOpen(true);
     sendBirthdayEmail(user.name, user.email, coupon.code).catch(() => {});
-    // Limpiar el parámetro de la URL sin recargar
     const clean = new URLSearchParams(location.search);
     clean.delete("test");
     const newUrl = clean.toString() ? `?${clean}` : window.location.pathname;
     window.history.replaceState({}, "", newUrl);
-  }, [user?.id]);
+  }, [location.search, user?.id]);
 
   const cartCount          = cart.reduce((s, i) => s + i.qty, 0);
   const activeReservations = reservations.filter(r => r.status === "active").length;
