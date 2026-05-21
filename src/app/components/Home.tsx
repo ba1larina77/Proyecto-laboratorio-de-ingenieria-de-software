@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, User, BookOpen, Sparkles, Clock, Filter, X, ChevronDown, Bell, BellRing, CheckCircle, MessageCircle, Bot, Headset, Send } from "lucide-react";
-import { Link, useSearchParams } from "react-router";
+import { Search, User, BookOpen, Sparkles, Clock, Filter, X, ChevronDown, Bell, BellRing, CheckCircle, MessageCircle, Bot, Headset, Send, LogOut } from "lucide-react";
+import { Link, useSearchParams, useNavigate } from "react-router";
 
 interface Book {
   id: number;
@@ -21,9 +21,15 @@ interface ChatMessage {
 }
 
 export function Home() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const role = searchParams.get('role') || 'usuario';
   const isVisitor = role === 'visitante';
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    navigate('/');
+  };
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -453,12 +459,22 @@ export function Home() {
               )}
             </form>
 
-            {/* Perfil de Usuario */}
-            <Link to="/profile" className="flex-shrink-0">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all hover:opacity-80" style={{ backgroundColor: '#606C38' }}>
-                <User className="w-5 h-5" style={{ color: '#FEFAE0' }} />
-              </div>
-            </Link>
+            {/* Perfil de Usuario y Logout */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <Link to="/profile">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all hover:opacity-80" style={{ backgroundColor: '#606C38' }}>
+                  <User className="w-5 h-5" style={{ color: '#FEFAE0' }} />
+                </div>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all hover:opacity-80"
+                style={{ backgroundColor: '#D4A373' }}
+                title="Cerrar Sesión"
+              >
+                <LogOut className="w-5 h-5" style={{ color: '#4A3728' }} />
+              </button>
+            </div>
           </div>
         </div>
       </header>

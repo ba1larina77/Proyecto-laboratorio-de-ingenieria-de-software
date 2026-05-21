@@ -14,11 +14,13 @@
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
 
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "ignoreDeprecations": "6.0"
   },
-  "include": ["src"]
+  "include": ["src", "tests", "vitest.config.ts"]
 }
