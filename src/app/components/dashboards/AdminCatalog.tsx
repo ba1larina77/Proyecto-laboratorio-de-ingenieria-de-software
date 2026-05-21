@@ -5,9 +5,9 @@ import { StoreInventoryPanel } from "../admin/StoreInventoryPanel";
 import { NewsFeed } from "../news/NewsFeed";
 import { AdminChatPanel } from "../admin/AdminChatPanel";
 import { Toast } from "../shop/Toast";
-import { BookOpen, LogOut, Settings, Store, Newspaper, Library, Bell } from "lucide-react";
+import { AddressAutocomplete } from "../ui/AddressAutocomplete";
+import { BookOpen, LogOut, Settings, Store, Newspaper, Library, Bell, Save } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Save } from "lucide-react";
 
 type AdminTab = "books" | "stores" | "news";
 
@@ -82,8 +82,8 @@ export function AdminCatalog() {
             <form onSubmit={handleCompleteProfileSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs font-semibold text-gray-600">DNI *</label>
-                  <input value={completeProfileData.dni} onChange={e => setCompleteProfileData({...completeProfileData, dni: e.target.value})} required autoFocus
+                  <label className="text-xs font-semibold text-gray-600">DNI * (mínimo 10 dígitos)</label>
+                  <input value={completeProfileData.dni} onChange={e => setCompleteProfileData({...completeProfileData, dni: e.target.value.replace(/\D/g, "")})} required autoFocus inputMode="numeric" maxLength={12}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-[#D4A373] outline-none text-sm" />
                 </div>
                 <div className="space-y-1.5">
@@ -103,13 +103,23 @@ export function AdminCatalog() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-600">Lugar Nacimiento *</label>
-                  <input value={completeProfileData.lugarNacimiento} onChange={e => setCompleteProfileData({...completeProfileData, lugarNacimiento: e.target.value})} required
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-[#D4A373] outline-none text-sm" />
+                  <AddressAutocomplete
+                    value={completeProfileData.lugarNacimiento}
+                    onChange={v => setCompleteProfileData({...completeProfileData, lugarNacimiento: v})}
+                    placeholder="Ciudad, País"
+                    required
+                    className="w-full pl-10 px-3 py-2 rounded-xl border border-gray-200 focus:border-[#D4A373] outline-none text-sm"
+                  />
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <label className="text-xs font-semibold text-gray-600">Dirección *</label>
-                  <input value={completeProfileData.direccion} onChange={e => setCompleteProfileData({...completeProfileData, direccion: e.target.value})} required
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-[#D4A373] outline-none text-sm" />
+                  <AddressAutocomplete
+                    value={completeProfileData.direccion}
+                    onChange={v => setCompleteProfileData({...completeProfileData, direccion: v})}
+                    placeholder="Calle 123 #45-67"
+                    required
+                    className="w-full pl-10 px-3 py-2 rounded-xl border border-gray-200 focus:border-[#D4A373] outline-none text-sm"
+                  />
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <label className="text-xs font-semibold text-gray-600">Género *</label>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { 
-  User, Mail, Lock, Calendar, MapPin, Home, 
-  FileText, ArrowLeft, Save, Check, ChevronRight 
+import {
+  User, Mail, Lock, Calendar, MapPin, Home,
+  FileText, ArrowLeft, Save, Check, ChevronRight, LockIcon
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useShop } from "../store/ShopContext";
@@ -9,8 +9,9 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Toast } from "./shop/Toast";
-import { 
-  validateDate, validatePassword, validateName 
+import { AddressAutocomplete } from "./ui/AddressAutocomplete";
+import {
+  validateDate, validatePassword, validateName
 } from "../utils/validators";
 
 export function Profile() {
@@ -243,22 +244,61 @@ export function Profile() {
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-[#4A3728] ml-1">Fecha de Nacimiento</Label>
-                    <div className="flex gap-2">
-                       <select value={bDay} onChange={e => setBDay(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
+                    <Label className="text-xs font-bold text-[#4A3728] ml-1 flex items-center gap-1.5">
+                      Fecha de Nacimiento
+                      {user?.fechaNacimientoLocked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: "rgba(192,57,43,0.1)", color: "#C0392B" }}>
+                          <LockIcon className="w-2.5 h-2.5" /> No modificable
+                        </span>
+                      )}
+                      {!user?.fechaNacimientoLocked && user?.fechaNacimiento && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: "rgba(212,163,115,0.15)", color: "#D4A373" }}>
+                          Solo 1 cambio permitido
+                        </span>
+                      )}
+                    </Label>
+                    {user?.fechaNacimientoLocked ? (
+                      <div className="h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 flex items-center text-sm text-[#4A3728] opacity-60 cursor-not-allowed">
+                        {formData.fechaNacimiento || "—"}
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <select value={bDay} onChange={e => setBDay(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
                           {Array.from({length:31}, (_,i)=>i+1).map(d => <option key={d} value={d}>{d}</option>)}
-                       </select>
-                       <select value={bMonth} onChange={e => setBMonth(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
+                        </select>
+                        <select value={bMonth} onChange={e => setBMonth(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
                           {Array.from({length:12}, (_,i)=>i+1).map(m => <option key={m} value={m}>{m}</option>)}
-                       </select>
-                       <select value={bYear} onChange={e => setBYear(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
+                        </select>
+                        <select value={bYear} onChange={e => setBYear(e.target.value)} className="flex-1 h-11 px-3 rounded-xl border border-[#E8C99A] bg-[#FEFAE0]/30 outline-none text-sm">
                           {Array.from({length:100}, (_,i)=>new Date().getFullYear()-13-i).map(y => <option key={y} value={y}>{y}</option>)}
-                       </select>
-                    </div>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
-                  <Field label="Lugar de Nacimiento" name="lugarNacimiento" value={formData.lugarNacimiento} onChange={handleChange} icon={<MapPin />} />
-                  <Field label="Dirección" name="direccion" value={formData.direccion} onChange={handleChange} icon={<Home />} />
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-xs font-bold text-[#4A3728] ml-1">Lugar de Nacimiento</Label>
+                    <AddressAutocomplete
+                      name="lugarNacimiento"
+                      value={formData.lugarNacimiento}
+                      onChange={v => setFormData(p => ({ ...p, lugarNacimiento: v }))}
+                      placeholder="Ciudad, País"
+                      className="w-full pl-10 h-11 rounded-xl bg-[#FEFAE0]/30 border border-[#E8C99A] focus:border-[#4A3728] outline-none transition-all text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-xs font-bold text-[#4A3728] ml-1">Dirección</Label>
+                    <AddressAutocomplete
+                      name="direccion"
+                      value={formData.direccion}
+                      onChange={v => setFormData(p => ({ ...p, direccion: v }))}
+                      placeholder="Calle 123 #45-67"
+                      className="w-full pl-10 h-11 rounded-xl bg-[#FEFAE0]/30 border border-[#E8C99A] focus:border-[#4A3728] outline-none transition-all text-sm"
+                    />
+                  </div>
                   
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-[#4A3728] ml-1">Género</Label>

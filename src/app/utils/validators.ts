@@ -4,8 +4,8 @@
 
 export const validateDNI = (v: string): string => {
   if (!v) return "El DNI es obligatorio";
-  if (!/^\d+$/.test(v)) return "El DNI solo debe contener números";
-  if (v.length < 7 || v.length > 10) return "El DNI debe tener entre 7 y 10 dígitos";
+  if (!/^\d+$/.test(v)) return "El DNI solo debe contener dígitos";
+  if (v.length < 10) return "El DNI debe tener mínimo 10 dígitos";
   return "";
 };
 

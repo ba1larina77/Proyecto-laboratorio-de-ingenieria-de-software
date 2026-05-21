@@ -2,6 +2,7 @@ import { LogOut, Save, Mail, Bell, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { AddressAutocomplete } from "../ui/AddressAutocomplete";
 import { validateDate } from "../../utils/validators";
 
 interface ModalProps {
@@ -78,8 +79,13 @@ export function AdminCompleteProfileModal({ isOpen, data, onChange, onSubmit, on
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
              <div className="col-span-2">
-                <Label className="text-xs font-bold text-[#4A3728] ml-1">DNI *</Label>
-                <Input value={data.dni} onChange={e => onChange({...data, dni: e.target.value})} required className="h-11 rounded-xl bg-[#FEFAE0]/30 border-[#E8C99A]" />
+                <Label className="text-xs font-bold text-[#4A3728] ml-1">DNI * (mínimo 10 dígitos)</Label>
+                <Input
+                  value={data.dni}
+                  onChange={e => onChange({...data, dni: e.target.value.replace(/\D/g, "")})}
+                  required inputMode="numeric" maxLength={12}
+                  className="h-11 rounded-xl bg-[#FEFAE0]/30 border-[#E8C99A]"
+                />
              </div>
              <div>
                 <Label className="text-xs font-bold text-[#4A3728] ml-1">Nombres *</Label>
@@ -95,7 +101,13 @@ export function AdminCompleteProfileModal({ isOpen, data, onChange, onSubmit, on
              </div>
              <div>
                 <Label className="text-xs font-bold text-[#4A3728] ml-1">Lugar Nacimiento *</Label>
-                <Input value={data.lugarNacimiento} onChange={e => onChange({...data, lugarNacimiento: e.target.value})} required className="h-11 rounded-xl bg-[#FEFAE0]/30 border-[#E8C99A]" />
+                <AddressAutocomplete
+                  value={data.lugarNacimiento}
+                  onChange={v => onChange({...data, lugarNacimiento: v})}
+                  placeholder="Ciudad, País"
+                  required
+                  className="w-full pl-10 h-11 rounded-xl bg-[#FEFAE0]/30 border border-[#E8C99A] outline-none text-sm"
+                />
              </div>
              <div className="col-span-2">
                 <Label className="text-xs font-bold text-[#4A3728] ml-1">Género *</Label>
@@ -108,7 +120,13 @@ export function AdminCompleteProfileModal({ isOpen, data, onChange, onSubmit, on
              </div>
              <div className="col-span-2">
                 <Label className="text-xs font-bold text-[#4A3728] ml-1">Dirección *</Label>
-                <Input value={data.direccion} onChange={e => onChange({...data, direccion: e.target.value})} required className="h-11 rounded-xl bg-[#FEFAE0]/30 border-[#E8C99A]" />
+                <AddressAutocomplete
+                  value={data.direccion}
+                  onChange={v => onChange({...data, direccion: v})}
+                  placeholder="Calle 123 #45-67"
+                  required
+                  className="w-full pl-10 h-11 rounded-xl bg-[#FEFAE0]/30 border border-[#E8C99A] outline-none text-sm"
+                />
              </div>
           </div>
           <div className="pt-4 flex flex-col gap-3">

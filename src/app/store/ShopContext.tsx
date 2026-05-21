@@ -28,6 +28,7 @@ export interface SessionUser {
   suscritoNoticias?: boolean;
   isProfileComplete?: boolean;
   temasPreferencia?: string[];
+  fechaNacimientoLocked?: boolean;
 }
 
 export interface ChatMessage {
@@ -841,12 +842,24 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback((data: Partial<SessionUser & { password?: string }>) => {
     if (!user) return { success: false, error: "No hay sesión activa" };
+    const update = { ...data };
+
+    // Fecha de nacimiento: solo modificable una vez después del registro inicial
+    if ("fechaNacimiento" in update && update.fechaNacimiento) {
+      if (user.fechaNacimientoLocked) {
+        delete update.fechaNacimiento; // ya está bloqueada, ignorar
+      } else if (user.fechaNacimiento) {
+        // Tiene fecha previa → esta es la única modificación permitida, bloquear
+        update.fechaNacimientoLocked = true;
+      }
+    }
+
     setRegisteredUsers(prev => {
-      const next = prev.map(u => u.id === user.id ? { ...u, ...data } : u);
+      const next = prev.map(u => u.id === user.id ? { ...u, ...update } : u);
       saveUsers(next);
       return next;
     });
-    setUser(prev => prev ? { ...prev, ...data } : prev);
+    setUser(prev => prev ? { ...prev, ...update } : prev);
     showToast("Perfil actualizado correctamente", "success");
     return { success: true };
   }, [user, showToast]);

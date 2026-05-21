@@ -1,21 +1,16 @@
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Mail, AlertTriangle } from "lucide-react";
 import { useShop } from "../../store/ShopContext";
+import { generateTempPassword, sendAdminWelcomeEmail } from "../../utils/birthdayEmail";
 
+const emptyForm = { correo: "", confirmarCorreo: "" };
 
-
-const emptyForm = {
-  correo: "", usuario: "", contrasena: "", confirmar: "",
-};
-
-function validateAdmin(f: typeof emptyForm) {
+function validateAdminEmail(f: typeof emptyForm) {
   const e: Record<string, string> = {};
-  if (!f.correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.correo)) e.correo = "Correo inválido";
-  if (!f.usuario || f.usuario.length < 4) e.usuario = "Usuario mínimo 4 caracteres";
-  if (/\s/.test(f.usuario)) e.usuario = "Sin espacios en el usuario";
-  if (!f.contrasena || f.contrasena.length < 8) e.contrasena = "Contraseña mínimo 8 caracteres";
-  if (/\s/.test(f.contrasena)) e.contrasena = "Sin espacios en la contraseña";
-  if (f.contrasena !== f.confirmar) e.confirmar = "Las contraseñas no coinciden";
+  if (!f.correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.correo))
+    e.correo = "Correo electrónico inválido";
+  if (f.correo !== f.confirmarCorreo)
+    e.confirmarCorreo = "Los correos no coinciden";
   return e;
 }
 
@@ -30,8 +25,7 @@ export function RootPanel() {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [serverError, setServerError] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(false);
 
   // Root credentials form (M7-HU2)
   const [rootForm, setRootForm] = useState({ currentPass: "", newPass: "", confirmPass: "" });
@@ -39,63 +33,53 @@ export function RootPanel() {
   const [savingRoot, setSavingRoot] = useState(false);
   const [showRootPasses, setShowRootPasses] = useState({ c: false, n: false, conf: false });
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
     const updated = { ...form, [name]: value };
     setForm(updated);
     setServerError("");
     if (touched[name]) {
-      const errs = validateAdmin(updated);
+      const errs = validateAdminEmail(updated);
       setErrors(p => ({ ...p, [name]: errs[name] || "" }));
     }
   }
 
-  function handleBlur(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
     const { name } = e.target;
     setTouched(p => ({ ...p, [name]: true }));
-    const errs = validateAdmin(form);
+    const errs = validateAdminEmail(form);
     setErrors(p => ({ ...p, [name]: errs[name] || "" }));
   }
 
-  function handleSubmitAdmin() {
+  function handleOpenConfirmModal() {
     setServerError("");
-    const allTouched: Record<string, boolean> = {};
-    Object.keys(form).forEach(k => { allTouched[k] = true; });
-    setTouched(allTouched);
-    const errs = validateAdmin(form);
+    setTouched({ correo: true, confirmarCorreo: true });
+    const errs = validateAdminEmail(form);
     setErrors(errs);
     if (Object.values(errs).some(v => v)) return;
+    setConfirmModal(true);
+  }
 
+  function handleConfirmCreateAdmin() {
+    setConfirmModal(false);
+    const tempPass = generateTempPassword();
+    const usuario  = form.correo.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
     setSaving(true);
     setTimeout(() => {
-      // ← Llamada real al contexto — guarda en registeredUsers para que pueda hacer login
-      const result = registerAdmin({
-        correo:     form.correo,
-        usuario:    form.usuario,
-        contrasena: form.contrasena,
-      });
-
+      const result = registerAdmin({ correo: form.correo, usuario, contrasena: tempPass });
       setSaving(false);
-
       if (!result.success) {
         setServerError(result.error || "Error al crear el administrador.");
         if (result.error?.includes("correo")) {
           setErrors(p => ({ ...p, correo: result.error! }));
           setTouched(p => ({ ...p, correo: true }));
         }
-        if (result.error?.includes("usuario")) {
-          setErrors(p => ({ ...p, usuario: result.error! }));
-          setTouched(p => ({ ...p, usuario: true }));
-        }
         return;
       }
-
+      sendAdminWelcomeEmail(form.correo, tempPass).catch(() => {});
       setForm({ ...emptyForm });
       setErrors({}); setTouched({});
-      setSuccessMsg(
-        `✓ Administrador creado. ` +
-        `Puede iniciar sesión con: ${form.usuario.trim().toLowerCase()} / ${form.contrasena}`
-      );
+      setSuccessMsg(`✓ Administrador creado. Se envió un correo a ${form.correo} con la clave temporal.`);
       setTab("admins");
       setTimeout(() => setSuccessMsg(""), 8000);
     }, 800);
@@ -298,9 +282,48 @@ export function RootPanel() {
         </div>
       )}
 
+      {/* ── MODAL DE CONFIRMACIÓN ── */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[800] flex items-center justify-center p-4"
+          style={{ background: "rgba(74,55,40,0.55)", backdropFilter: "blur(4px)" }}>
+          <div className="w-full max-w-sm rounded-2xl p-8 text-center bg-white"
+            style={{ boxShadow: "0 24px 80px rgba(74,55,40,0.3)" }}>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+              style={{ background: "rgba(74,55,40,0.08)" }}>
+              <Mail className="w-7 h-7" style={{ color: "#4A3728" }} />
+            </div>
+            <h3 className="text-xl font-bold mb-2" style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728" }}>
+              ¿Crear administrador?
+            </h3>
+            <p className="text-sm mb-1" style={{ color: "#6B5344" }}>
+              Se creará un nuevo usuario administrador con el correo:
+            </p>
+            <p className="text-sm font-bold px-3 py-2 rounded-xl my-3 break-all"
+              style={{ background: "#F5EDD3", color: "#4A3728" }}>
+              {form.correo}
+            </p>
+            <p className="text-xs mb-6" style={{ color: "#6B5344" }}>
+              Se enviará una clave temporal al correo indicado para que el administrador pueda ingresar al sistema.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
+                style={{ borderColor: "#D4A373", color: "#4A3728" }}>
+                Cancelar
+              </button>
+              <button onClick={handleConfirmCreateAdmin}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90"
+                style={{ background: "#4A3728", color: "#FEFAE0" }}>
+                Sí, crear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── FORMULARIO: Crear Administrador ── */}
       {tab === "create" && (
-        <div className="rounded-2xl p-6" style={{ background: "#fff", boxShadow: "0 3px 16px rgba(74,55,40,0.08)" }}>
+        <div className="max-w-md rounded-2xl p-6" style={{ background: "#fff", boxShadow: "0 3px 16px rgba(74,55,40,0.08)" }}>
           <div className="flex items-center gap-3 mb-6">
             <button onClick={() => { setTab("admins"); setServerError(""); setErrors({}); setTouched({}); }}
               className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F5EDD3", color: "#4A3728" }}>
@@ -313,11 +336,11 @@ export function RootPanel() {
             </h2>
           </div>
 
-          <div className="rounded-xl p-3 mb-5 text-xs" style={{ background: "#F5EDD3", color: "#6B5344" }}>
-            ⚠️ Solo el usuario root puede crear administradores. Los administradores no pueden comprar ni reservar libros.
+          <div className="rounded-xl p-3 mb-5 text-xs flex items-start gap-2" style={{ background: "#F5EDD3", color: "#6B5344" }}>
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>Solo el usuario root puede crear administradores. Se generará una clave temporal y se enviará al correo indicado.</span>
           </div>
 
-          {/* Error de servidor */}
           {serverError && (
             <div className="rounded-xl px-4 py-3 mb-5 flex items-center gap-2"
               style={{ background: "rgba(192,57,43,0.08)", border: "1.5px solid #C0392B" }}>
@@ -328,52 +351,24 @@ export function RootPanel() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {([
-              ["correo",         "Correo electrónico *",   "email", "admin@biblion.co"],
-              ["usuario",        "Nombre de usuario *",    "text",  "nuevo.admin"],
-            ] as [string, string, string, string][]).map(([name, label, type, placeholder]) => (
-              <div key={name}>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>{label}</label>
-                <input name={name} type={type} value={(form as any)[name]}
-                  onChange={handleChange} onBlur={handleBlur as any}
-                  placeholder={placeholder}
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-                  style={inputStyle(name)} />
-                <FieldErr name={name} errs={errors} />
-              </div>
-            ))}
-
-            {/* Contraseña */}
+          <div className="space-y-4 mb-6">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Contraseña *</label>
-              <div className="relative">
-                <input name="contrasena" type={showPass ? "text" : "password"} value={form.contrasena}
-                  onChange={handleChange} onBlur={handleBlur as any} placeholder="Mínimo 8 caracteres"
-                  className="w-full px-4 pr-10 py-2.5 rounded-xl text-sm outline-none"
-                  style={inputStyle("contrasena")} />
-                <button type="button" onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#D4A373" }}>
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <FieldErr name="contrasena" errs={errors} />
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Correo electrónico *</label>
+              <input name="correo" type="email" value={form.correo}
+                onChange={handleChange} onBlur={handleBlur}
+                placeholder="admin@biblion.co"
+                className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                style={inputStyle("correo")} />
+              <FieldErr name="correo" errs={errors} />
             </div>
-
-            {/* Confirmar contraseña */}
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Confirmar contraseña *</label>
-              <div className="relative">
-                <input name="confirmar" type={showConfirm ? "text" : "password"} value={form.confirmar}
-                  onChange={handleChange} onBlur={handleBlur as any} placeholder="Repite la contraseña"
-                  className="w-full px-4 pr-10 py-2.5 rounded-xl text-sm outline-none"
-                  style={inputStyle("confirmar")} />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#D4A373" }}>
-                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <FieldErr name="confirmar" errs={errors} />
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Confirmar correo electrónico *</label>
+              <input name="confirmarCorreo" type="email" value={form.confirmarCorreo}
+                onChange={handleChange} onBlur={handleBlur}
+                placeholder="Repite el correo"
+                className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                style={inputStyle("confirmarCorreo")} />
+              <FieldErr name="confirmarCorreo" errs={errors} />
             </div>
           </div>
 
@@ -383,7 +378,7 @@ export function RootPanel() {
               style={{ borderColor: "#D4A373", color: "#4A3728" }}>
               Cancelar
             </button>
-            <button onClick={handleSubmitAdmin} disabled={saving}
+            <button onClick={handleOpenConfirmModal} disabled={saving}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 hover:opacity-90"
               style={{ background: "#4A3728", color: "#FEFAE0" }}>
               {saving

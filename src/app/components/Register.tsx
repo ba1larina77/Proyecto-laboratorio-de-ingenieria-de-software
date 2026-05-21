@@ -8,9 +8,10 @@ import { useShop } from "../store/ShopContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { 
-  validateDNI, validateName, validateDate, validateEmail, 
-  validateUsername, validatePassword, validateConfirm, getPasswordStrength 
+import { AddressAutocomplete } from "./ui/AddressAutocomplete";
+import {
+  validateDNI, validateName, validateDate, validateEmail,
+  validateUsername, validatePassword, validateConfirm, getPasswordStrength
 } from "../utils/validators";
 
 interface FieldError { [key: string]: string }
@@ -179,7 +180,7 @@ export function Register() {
             {step === 1 && (
               <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="DNI" name="dni" value={formData.dni} error={touched.dni ? errors.dni : ""} onChange={handleChange} placeholder="12345678" icon={<FileText />} />
+                  <Field label="DNI" name="dni" value={formData.dni} error={touched.dni ? errors.dni : ""} onChange={e => { const v = e.target.value.replace(/\D/g, ""); setFormData(p => ({ ...p, dni: v })); if (touched.dni) setErrors(p => ({ ...p, dni: "" })); }} placeholder="Mínimo 10 dígitos" icon={<FileText />} inputMode="numeric" />
                   <div className="space-y-1.5">
                     <Label className="text-[#4A3728] font-semibold text-xs ml-1">Fecha de Nacimiento *</Label>
                     <div className="flex gap-2">
@@ -195,10 +196,21 @@ export function Register() {
                   <Field label="Apellidos" name="apellidos" value={formData.apellidos} error={touched.apellidos ? errors.apellidos : ""} onChange={handleChange} placeholder="Pérez" icon={<User />} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Lugar de Nacimiento" name="lugarNacimiento" value={formData.lugarNacimiento} error={touched.lugarNacimiento ? errors.lugarNacimiento : ""} onChange={handleChange} placeholder="Ciudad, País" icon={<MapPin />} />
+                  <div className="space-y-1.5 flex-1">
+                    <Label className="text-[#4A3728] font-semibold text-xs ml-1">Lugar de Nacimiento *</Label>
+                    <AddressAutocomplete
+                      name="lugarNacimiento"
+                      value={formData.lugarNacimiento}
+                      onChange={v => { setFormData(p => ({ ...p, lugarNacimiento: v })); if (touched.lugarNacimiento) setErrors(p => ({ ...p, lugarNacimiento: "" })); }}
+                      onBlur={() => { setTouched(p => ({ ...p, lugarNacimiento: true })); if (!formData.lugarNacimiento.trim()) setErrors(p => ({ ...p, lugarNacimiento: "El lugar de nacimiento es obligatorio" })); }}
+                      placeholder="Ciudad, País"
+                      className={`w-full pl-10 h-10 rounded-xl bg-[#FEFAE0]/30 border outline-none text-sm transition-all ${touched.lugarNacimiento && errors.lugarNacimiento ? "border-red-500" : "border-[#E8C99A] focus:border-[#4A3728]"}`}
+                    />
+                    {touched.lugarNacimiento && errors.lugarNacimiento && <p className="text-[10px] text-red-500 mt-1 ml-1">{errors.lugarNacimiento}</p>}
+                  </div>
                   <div className="space-y-1.5">
                     <Label className="text-[#4A3728] font-semibold text-xs ml-1">Género *</Label>
-                    <select name="genero" value={formData.genero} onChange={handleChange} 
+                    <select name="genero" value={formData.genero} onChange={handleChange}
                       className={`w-full px-3 py-2 rounded-xl border bg-[#FEFAE0]/30 outline-none h-10 text-sm transition-all ${touched.genero && errors.genero ? "border-red-500" : "border-[#E8C99A] focus:border-[#4A3728]"}`}>
                       <option value="">Seleccionar...</option>
                       <option value="masculino">Masculino</option>
@@ -208,7 +220,18 @@ export function Register() {
                     {touched.genero && errors.genero && <p className="text-[10px] text-red-500 mt-1 ml-1">{errors.genero}</p>}
                   </div>
                 </div>
-                <Field label="Dirección de Residencia" name="direccion" value={formData.direccion} error={touched.direccion ? errors.direccion : ""} onChange={handleChange} placeholder="Calle 123 #45-67" icon={<Home />} />
+                <div className="space-y-1.5 flex-1">
+                  <Label className="text-[#4A3728] font-semibold text-xs ml-1">Dirección de Residencia *</Label>
+                  <AddressAutocomplete
+                    name="direccion"
+                    value={formData.direccion}
+                    onChange={v => { setFormData(p => ({ ...p, direccion: v })); if (touched.direccion) setErrors(p => ({ ...p, direccion: "" })); }}
+                    onBlur={() => { setTouched(p => ({ ...p, direccion: true })); if (!formData.direccion.trim()) setErrors(p => ({ ...p, direccion: "La dirección es obligatoria" })); }}
+                    placeholder="Calle 123 #45-67"
+                    className={`w-full pl-10 h-10 rounded-xl bg-[#FEFAE0]/30 border outline-none text-sm transition-all ${touched.direccion && errors.direccion ? "border-red-500" : "border-[#E8C99A] focus:border-[#4A3728]"}`}
+                  />
+                  {touched.direccion && errors.direccion && <p className="text-[10px] text-red-500 mt-1 ml-1">{errors.direccion}</p>}
+                </div>
               </div>
             )}
 

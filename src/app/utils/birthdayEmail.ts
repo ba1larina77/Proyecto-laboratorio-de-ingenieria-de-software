@@ -1,9 +1,10 @@
 import emailjs from "@emailjs/browser";
 
 // ── CLAVES EmailJS (desde .env) ───────────────────────────────
-const SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID  as string;
-const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID as string;
-const PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY  as string;
+const SERVICE_ID         = import.meta.env.VITE_EMAILJS_SERVICE_ID          as string;
+const TEMPLATE_ID        = import.meta.env.VITE_EMAILJS_TEMPLATE_ID         as string;
+const PUBLIC_KEY         = import.meta.env.VITE_EMAILJS_PUBLIC_KEY          as string;
+const ADMIN_TEMPLATE_ID  = import.meta.env.VITE_EMAILJS_ADMIN_TEMPLATE_ID   as string;
 
 // ── PERSISTENCIA DE CUPONES (localStorage) ───────────────────
 const LS_COUPONS_KEY = "biblion_birthday_coupons";
@@ -153,6 +154,45 @@ export function validateCouponCode(code: string): BirthdayCoupon | null {
 }
 
 // ── ENVÍO DE CORREO ──────────────────────────────────────────
+
+/**
+ * Genera una contraseña temporal segura para nuevos administradores.
+ * Formato: Bib + 4 chars alfanuméricos + ! + 2 dígitos → 10 chars total
+ */
+export function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let part = "";
+  for (let i = 0; i < 4; i++) {
+    part += chars[Math.floor(Math.random() * chars.length)];
+  }
+  const digits = String(Math.floor(Math.random() * 90) + 10);
+  return `Bib${part}!${digits}`;
+}
+
+/**
+ * Envía el correo de bienvenida al nuevo administrador con su clave temporal.
+ */
+export async function sendAdminWelcomeEmail(
+  correo: string,
+  tempPassword: string,
+  loginUrl: string = window.location.origin + "/login"
+): Promise<void> {
+  if (!SERVICE_ID || !ADMIN_TEMPLATE_ID || !PUBLIC_KEY) {
+    console.warn("[Biblion] EmailJS no configurado — correo de bienvenida admin no enviado.");
+    return;
+  }
+
+  await emailjs.send(
+    SERVICE_ID,
+    ADMIN_TEMPLATE_ID,
+    {
+      to_email:      correo,
+      temp_password: tempPassword,
+      login_url:     loginUrl,
+    },
+    PUBLIC_KEY
+  );
+}
 
 /**
  * Envía el correo de cumpleaños con el enlace del bono vía EmailJS.
