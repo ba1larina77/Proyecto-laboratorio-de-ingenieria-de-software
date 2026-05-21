@@ -62,11 +62,12 @@ export function RootPanel() {
 
   function handleConfirmCreateAdmin() {
     setConfirmModal(false);
-    const tempPass = generateTempPassword();
-    const usuario  = form.correo.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    const tempPass  = generateTempPassword();
+    const correo    = form.correo;
+    const usuario   = correo.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
     setSaving(true);
     setTimeout(() => {
-      const result = registerAdmin({ correo: form.correo, usuario, contrasena: tempPass });
+      const result = registerAdmin({ correo, usuario, contrasena: tempPass });
       setSaving(false);
       if (!result.success) {
         setServerError(result.error || "Error al crear el administrador.");
@@ -76,12 +77,22 @@ export function RootPanel() {
         }
         return;
       }
-      sendAdminWelcomeEmail(form.correo, tempPass).catch(() => {});
       setForm({ ...emptyForm });
       setErrors({}); setTouched({});
-      setSuccessMsg(`✓ Administrador creado. Se envió un correo a ${form.correo} con la clave temporal.`);
+      setSuccessMsg(`✓ Administrador creado. Enviando correo a ${correo}…`);
       setTab("admins");
-      setTimeout(() => setSuccessMsg(""), 8000);
+
+      sendAdminWelcomeEmail(correo, tempPass)
+        .then(() => {
+          setSuccessMsg(`✓ Administrador creado. Correo con clave temporal enviado a ${correo}.`);
+        })
+        .catch((err) => {
+          console.error("[Biblion] Error enviando correo admin:", err);
+          showToast(`Admin creado, pero el correo no se pudo enviar: ${err?.text ?? err?.message ?? "error desconocido"}`, "error");
+          setSuccessMsg(`✓ Administrador creado (${correo}). El correo falló — revisa la consola.`);
+        });
+
+      setTimeout(() => setSuccessMsg(""), 10000);
     }, 800);
   }
 

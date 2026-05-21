@@ -82,6 +82,22 @@ export function Shop() {
     }
   }, [location.search]);
 
+  // TEST OCULTO: /?test=cumpleanos — fuerza el flujo de cumpleaños sin importar la fecha
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("test") !== "cumpleanos") return;
+    if (!user || user.role !== "cliente") return;
+    const coupon = createBirthdayCoupon(user.id);
+    setBirthdayCoupon(coupon);
+    setBirthdayModalOpen(true);
+    sendBirthdayEmail(user.name, user.email, coupon.code).catch(() => {});
+    // Limpiar el parámetro de la URL sin recargar
+    const clean = new URLSearchParams(location.search);
+    clean.delete("test");
+    const newUrl = clean.toString() ? `?${clean}` : window.location.pathname;
+    window.history.replaceState({}, "", newUrl);
+  }, [user?.id]);
+
   const cartCount          = cart.reduce((s, i) => s + i.qty, 0);
   const activeReservations = reservations.filter(r => r.status === "active").length;
   const activeSupportChats = chats.filter(c => c.status === "active").sort((a,b) => a.startedAt - b.startedAt);

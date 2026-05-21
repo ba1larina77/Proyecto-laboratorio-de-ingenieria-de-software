@@ -171,6 +171,7 @@ export function generateTempPassword(): string {
 
 /**
  * Envía el correo de bienvenida al nuevo administrador con su clave temporal.
+ * Variables del template: admin_name, library_name, admin_email, temp_password, expiry_time, login_url
  */
 export async function sendAdminWelcomeEmail(
   correo: string,
@@ -182,12 +183,17 @@ export async function sendAdminWelcomeEmail(
     return;
   }
 
+  const adminName = correo.split("@")[0];
+
   await emailjs.send(
     SERVICE_ID,
     ADMIN_TEMPLATE_ID,
     {
-      to_email:      correo,
+      admin_name:    adminName,
+      library_name:  "Biblion",
+      admin_email:   correo,
       temp_password: tempPassword,
+      expiry_time:   "24 horas",
       login_url:     loginUrl,
     },
     PUBLIC_KEY
@@ -214,16 +220,19 @@ export async function sendBirthdayEmail(
 
   const bonoUrl = `${baseUrl}/?bono=cumpleanos&code=${couponCode}`;
 
+  const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
   await emailjs.send(
     SERVICE_ID,
     TEMPLATE_ID,
     {
-      to_name:    nombre,
-      to_email:   correo,
-      bono_url:   bonoUrl,
-      coupon_code: couponCode,
-      discount:   "15%",
-      expires_in: "1 día",
+      to_name:       nombre,
+      to_email:      correo,
+      discount_code: couponCode,
+      expiry_date:   expiryDate,
+      shop_link:     bonoUrl,
+      library_name:  "Biblion",
     },
     PUBLIC_KEY
   );
