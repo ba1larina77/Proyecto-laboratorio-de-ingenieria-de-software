@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
 import {
   BookOpen, LogOut, Wallet, Shield, Settings,
-  MessageCircle, Bell, User, X
+  MessageCircle, Bell, User, X, Mail
 } from "lucide-react";
 import { useShop, fmt } from "../store/ShopContext";
 import {
@@ -24,13 +24,17 @@ import { AdminPanel }    from "./admin/AdminPanel";
 import { RootPanel }     from "./root/RootPanel";
 import { Wallet as WalletPanel } from "./financial/Wallet";
 import { ChatWidget }    from "./shop/ChatWidget";
+import { DirectMessageWidget }   from "./shop/DirectMessageWidget";
 import { LogoutModal, SubscribeModal, AdminCompleteProfileModal } from "./shop/ShopModals";
-import { AdminChatPanel } from "./admin/AdminChatPanel";
+import { AdminChatPanel }        from "./admin/AdminChatPanel";
+import { AdminDirectMessages }   from "./admin/AdminDirectMessages";
+import { RecommendedBooks }      from "./shop/RecommendedBooks";
+import { BotChatWidget }        from "./shop/BotChatWidget";
 
 type ShopTab = "catalog" | "reservations" | "history" | "wallet" | "admin" | "root";
 
 export function Shop() {
-  const { user, cart, reservations, chats, openCart, logout, updateProfile, showToast } = useShop();
+  const { user, cart, reservations, chats, directMessages, unreadDirectCount, pendingAdminCount, openCart, logout, updateProfile, showToast, spotlightBookId } = useShop();
   const navigate = useNavigate();
   const location = useLocation();
   const role = user?.role ?? "visitante";
@@ -40,6 +44,8 @@ export function Shop() {
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [subscribeModalOpen, setSubscribeModalOpen] = useState(false);
   const [adminBellOpen, setAdminBellOpen] = useState(false);
+  const [adminDirectMsgOpen, setAdminDirectMsgOpen] = useState(false);
+  const [dmWidgetOpen, setDmWidgetOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [birthdayModalOpen, setBirthdayModalOpen] = useState(false);
   const [birthdayCoupon, setBirthdayCoupon] = useState<BirthdayCoupon | null>(null);
@@ -97,9 +103,15 @@ export function Shop() {
     window.history.replaceState({}, "", newUrl);
   }, [location.search, user?.id]);
 
+  // Cuando el bot señaliza un libro, cambiar al catálogo
+  useEffect(() => {
+    if (spotlightBookId) setTab("catalog");
+  }, [spotlightBookId]);
+
   const cartCount          = cart.reduce((s, i) => s + i.qty, 0);
   const activeReservations = reservations.filter(r => r.status === "active").length;
   const activeSupportChats = chats.filter(c => c.status === "active").sort((a,b) => a.startedAt - b.startedAt);
+  const pendingDirectMessages = pendingAdminCount;
 
   const TABS: { key: ShopTab; label: string; badge?: number; roles: string[] }[] = [
     { key: "catalog",      label: "Catálogo",        roles: ["cliente", "admin", "root", "visitante"] },
@@ -180,6 +192,22 @@ export function Shop() {
             )}
 
             {role === "cliente" && (
+              <button
+                onClick={() => setDmWidgetOpen(true)}
+                title="Mensajes del administrador"
+                className="relative w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity"
+                style={{ background: "#606C38" }}
+              >
+                <Mail className="w-5 h-5 text-white" />
+                {unreadDirectCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white animate-pulse">
+                    {unreadDirectCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {role === "cliente" && (
               <button onClick={openCart} className="relative w-10 h-10 rounded-xl bg-[#F5EDD3] flex items-center justify-center hover:bg-[#E8C99A]/40 transition-colors">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4A3728" strokeWidth="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                 {cartCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#4A3728] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{cartCount}</span>}
@@ -187,14 +215,27 @@ export function Shop() {
             )}
 
             {(role === "admin" || role === "root") && (
-               <div className="relative">
-                  <button onClick={() => setAdminBellOpen(true)} className="w-10 h-10 rounded-xl bg-[#F5EDD3] flex items-center justify-center relative">
-                    <Bell className="w-5 h-5 text-[#4A3728]" />
-                    {activeSupportChats.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 animate-pulse border-2 border-white" />}
-                  </button>
+               <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button onClick={() => setAdminBellOpen(true)} className="w-10 h-10 rounded-xl bg-[#F5EDD3] flex items-center justify-center relative" title="Chats de soporte">
+                      <Bell className="w-5 h-5 text-[#4A3728]" />
+                      {activeSupportChats.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 animate-pulse border-2 border-white" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <button onClick={() => setAdminDirectMsgOpen(true)} className="w-10 h-10 rounded-xl flex items-center justify-center relative transition-colors" style={{ background: "#606C38" }} title="Mensajes directos">
+                      <MessageCircle className="w-5 h-5 text-white" />
+                      {pendingDirectMessages > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white animate-pulse">
+                          {pendingDirectMessages}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                </div>
             )}
             {adminBellOpen && <AdminChatPanel onClose={() => setAdminBellOpen(false)} />}
+            {adminDirectMsgOpen && <AdminDirectMessages onClose={() => setAdminDirectMsgOpen(false)} />}
 
             <div className="h-8 w-px bg-[#E8C99A]/40 mx-1 hidden sm:block" />
 
@@ -213,6 +254,7 @@ export function Shop() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {tab === "catalog" && <RecommendedBooks context="catalog" />}
         {tab === "catalog"      && <Catalog />}
         {tab === "reservations" && <Reservations />}
         {tab === "history"      && <History />}
@@ -235,6 +277,8 @@ export function Shop() {
       )}
 
       <ChatWidget />
+      <BotChatWidget />
+      <DirectMessageWidget forceOpen={dmWidgetOpen} onOpenChange={setDmWidgetOpen} />
       <Toast />
 
       <BirthdayBonusModal

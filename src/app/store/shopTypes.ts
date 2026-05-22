@@ -149,6 +149,99 @@ export interface AdminUser {
   createdAt: Date;
 }
 
+// ── MÉTRICAS DE TENDENCIAS ────────────────────────────────────
+export interface TrendMetrics {
+  /** IDs ordenados por unidades vendidas en pedidos entregados */
+  bestsellerIds: number[];
+  /** IDs ordenados por promedio de calificación (reviews aprobadas) */
+  topRatedIds: number[];
+  /** IDs de libros con isNew=true o addedDate en últimos 30 días */
+  newBookIds: number[];
+  /** Timestamp del cálculo — para invalidar el caché */
+  computedAt: number;
+}
+
+// ── BOT DE RECOMENDACIONES ────────────────────────────────────
+
+/** Un libro incluido en la respuesta del bot con su razón */
+export interface BotBookResult {
+  bookId: number;
+  title: string;
+  author: string;
+  cover: string;
+  price: number;
+  rating: number;
+  available: boolean;
+  reason: string;
+}
+
+/** Un mensaje dentro del chat con el bot */
+export interface BotMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  content: string;
+  /** Presentes solo en mensajes del bot cuando hay libros recomendados */
+  books?: BotBookResult[];
+  intent?: string;
+  timestamp: number;
+}
+
+// ── RECOMENDACIONES PERSONALIZADAS ───────────────────────────
+export interface Recommendation {
+  book: Book;
+  /** Texto explicativo generado por el RecommendationService */
+  reason: string;
+  /** Score interno (mayor = más relevante) */
+  score: number;
+}
+
+// ── RESEÑAS Y CALIFICACIONES ─────────────────────────────────
+export type ReviewStatus = 'approved' | 'pending' | 'rejected';
+
+export interface Review {
+  id: string;
+  bookId: number;
+  userId: string;
+  userName: string;
+  /** Calificación entera entre 1 y 5 */
+  rating: number;
+  comment: string;
+  status: ReviewStatus;
+  createdAt: number;
+}
+
+// ── MENSAJES DIRECTOS AL ADMINISTRADOR ───────────────────────
+/** Estado general de la conversación */
+export type DirectConvStatus = 'pending_admin' | 'pending_user' | 'active' | 'resolved';
+
+/** Un mensaje individual dentro del hilo */
+export interface DmMessage {
+  id: string;
+  sender: 'user' | 'admin';
+  senderName: string;
+  content: string;
+  timestamp: number;
+}
+
+/** Conversación directa entre un usuario y los administradores */
+export interface DirectMessage {
+  /** ID único de la conversación — formato: `conv-{userId}` */
+  id: string;
+  userId: string;
+  userName: string;
+  status: DirectConvStatus;
+  messages: DmMessage[];
+  /**
+   * Timestamp del último mensaje enviado por el usuario.
+   * 0 si el admin ya respondió (el reloj de urgencia se resetea).
+   * Usado para calcular la alerta de 24 h sin respuesta.
+   */
+  lastUserMsgAt: number;
+  resolvedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ── M1-HU5 — Noticias automáticas por nuevo libro ────────────
 export interface News {
   id: string;

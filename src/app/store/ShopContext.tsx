@@ -1,10 +1,13 @@
 import {
-  createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo
+  createContext, useContext, useState, useCallback, useEffect, ReactNode, useMemo, useRef
 } from "react";
+import { io, Socket } from "socket.io-client";
+import { sendAdminReplyEmail } from "../utils/notificationEmail";
 import type {
   Book, CartItem, Purchase, Reservation,
   ReservationHistory, Cancellation, WalletTransaction,
-  Store, StoreInventory, News
+  Store, StoreInventory, News, DirectMessage, DmMessage, Review,
+  Recommendation, BotMessage, TrendMetrics
 } from "./shopTypes";
 
 // ── TIPOS DE USUARIO Y ROL ────────────────────────────────────
@@ -310,11 +313,46 @@ interface ShopContextType {
   reservationHistory: ReservationHistory[];
   cancellations: Cancellation[];
 
-  // Chat
+  // Bot de recomendaciones
+  botMessages: BotMessage[];
+  botTyping: boolean;
+  sendBotMessage: (text: string) => Promise<void>;
+  clearBotHistory: () => void;
+  /** ID del libro a abrir en el catálogo (señal de navegación desde el bot) */
+  spotlightBookId: number | null;
+  spotlightBook: (id: number) => void;
+  clearSpotlight: () => void;
+
+  // Recomendaciones personalizadas
+  recommendations: Recommendation[];
+  recommendationsLoading: boolean;
+  refreshRecommendations: () => void;
+
+  // Reseñas y calificaciones
+  reviews: Review[];
+  submitReview: (bookId: number, rating: number, comment: string) => Promise<{ success: boolean; error?: string }>;
+  getBookReviews: (bookId: number) => Review[];
+  getBookAvgRating: (bookId: number) => number | null;
+  hasPurchasedBook: (bookId: number) => boolean;
+  hasReviewedBook: (bookId: number) => boolean;
+
+  // Chat (soporte en línea)
   chats: ChatSession[];
   sendMessageToAdmin: (text: string) => void;
   replyToChat: (chatId: string, text: string) => void;
   resolveChat: (chatId: string) => void;
+
+  // Mensajes directos al administrador
+  directMessages: DirectMessage[];
+  /** Número de conversaciones con mensajes del admin sin leer por el usuario */
+  unreadDirectCount: number;
+  /** Número de conversaciones activas con mensajes pendientes del usuario (para badge del admin) */
+  pendingAdminCount: number;
+  sendDirectMessage: (content: string) => void;
+  adminSendToUser: (userId: string, userName: string, content: string) => void;
+  markDirectMessageRead: (convId: string) => void;
+  resolveConversation: (convId: string) => void;
+
 
   // Toast
   toast: string;
@@ -392,6 +430,9 @@ const STORAGE_KEY_CHATS         = "biblion_chats";
 const STORAGE_KEY_WALLET_TXS    = "biblion_wallet_txs";
 const STORAGE_KEY_NEWS          = "biblion_news";              // M1-HU5
 const STORAGE_KEY_STORE_INVENT  = "biblion_store_inventory";   // M1-HU7
+const STORAGE_KEY_DIRECT_MSGS   = "biblion_direct_messages_v2";
+const STORAGE_KEY_REVIEWS       = "biblion_reviews";
+const STORAGE_KEY_BOT_MSGS      = "biblion_bot_messages";
 
 function loadUsers(): (SessionUser & { password: string })[] {
   try {
@@ -519,6 +560,38 @@ function loadCancellations(): Cancellation[] {
   }
 }
 
+function loadBotMessages(): BotMessage[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY_BOT_MSGS);
+    if (!data) return [];
+    return JSON.parse(data) as BotMessage[];
+  } catch { return []; }
+}
+
+function loadReviews(): Review[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY_REVIEWS);
+    if (!data) return [];
+    return JSON.parse(data) as Review[];
+  } catch {
+    return [];
+  }
+}
+
+function loadDirectMessages(): DirectMessage[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY_DIRECT_MSGS);
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    // Descartar entradas con formato antiguo (no tienen campo messages[])
+    return parsed.filter((c: any) => Array.isArray(c.messages)) as DirectMessage[];
+  } catch {
+    return [];
+  }
+}
+
+
 function loadChats(): ChatSession[] {
   try {
     const data = localStorage.getItem(STORAGE_KEY_CHATS);
@@ -604,6 +677,14 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const [reservationHistory, setReservationHistory] = useState<ReservationHistory[]>(loadResHistory);
   const [cancellations, setCancellations] = useState<Cancellation[]>(loadCancellations);
   const [chats, setChats] = useState<ChatSession[]>(loadChats);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>(loadDirectMessages);
+  const [reviews, setReviews] = useState<Review[]>(loadReviews);
+  const [botMessages, setBotMessages] = useState<BotMessage[]>(loadBotMessages);
+  const [botTyping, setBotTyping] = useState(false);
+  const [spotlightBookId, setSpotlightBookId] = useState<number | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>(loadWalletTxs);
   // M1-HU5: noticias publicadas + pendientes para reproceso
   const [news, setNews] = useState<News[]>(loadNews);
@@ -650,6 +731,18 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   }, [chats]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_DIRECT_MSGS, JSON.stringify(directMessages));
+  }, [directMessages]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_REVIEWS, JSON.stringify(reviews));
+  }, [reviews]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_BOT_MSGS, JSON.stringify(botMessages));
+  }, [botMessages]);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY_WALLET_TXS, JSON.stringify(walletTransactions));
   }, [walletTransactions]);
 
@@ -671,6 +764,109 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem(SESSION_KEY);
     }
   }, [user]);
+
+  // ── SOCKET.IO — mensajes directos en tiempo real ────────────
+  useEffect(() => {
+    const socket = io('http://localhost:3001', { transports: ['websocket'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      if (user) {
+        socket.emit('identify', { userId: user.id, role: user.role });
+      }
+    });
+
+    // Nuevo mensaje del usuario recibido por el admin
+    socket.on('direct:new_msg', (payload: { convId: string; userId: string; userName: string; dmMsg: DmMessage }) => {
+      setDirectMessages(prev => {
+        const existing = prev.find(c => c.id === payload.convId);
+        const now = payload.dmMsg.timestamp;
+        if (existing) {
+          if (existing.messages.find(m => m.id === payload.dmMsg.id)) return prev;
+          return prev.map(c =>
+            c.id === payload.convId
+              ? { ...c, status: 'pending_admin' as const, lastUserMsgAt: now, messages: [...c.messages, payload.dmMsg], updatedAt: now }
+              : c
+          );
+        }
+        const newConv: DirectMessage = {
+          id: payload.convId, userId: payload.userId, userName: payload.userName,
+          status: 'pending_admin', lastUserMsgAt: now, messages: [payload.dmMsg], createdAt: now, updatedAt: now,
+        };
+        return [newConv, ...prev];
+      });
+    });
+
+    // Mensaje del admin recibido por el usuario
+    socket.on('direct:admin_msg', (payload: { convId: string; userId: string; userName: string; dmMsg: DmMessage }) => {
+      setDirectMessages(prev => {
+        const existing = prev.find(c => c.id === payload.convId);
+        const now = payload.dmMsg.timestamp;
+        if (existing) {
+          if (existing.messages.find(m => m.id === payload.dmMsg.id)) return prev;
+          return prev.map(c =>
+            c.id === payload.convId
+              // lastUserMsgAt = 0 cuando el admin responde (resetea urgencia)
+              ? { ...c, status: 'pending_user' as const, lastUserMsgAt: 0, messages: [...c.messages, payload.dmMsg], updatedAt: now }
+              : c
+          );
+        }
+        const newConv: DirectMessage = {
+          id: payload.convId, userId: payload.userId, userName: payload.userName,
+          status: 'pending_user', lastUserMsgAt: 0, messages: [payload.dmMsg], createdAt: now, updatedAt: now,
+        };
+        return [newConv, ...prev];
+      });
+
+      // ── Notificación por correo si el tab está oculto (usuario inactivo) ──
+      // Leemos la sesión en ese momento para obtener email del usuario actual.
+      if (document.hidden) {
+        try {
+          const raw = sessionStorage.getItem("biblion_session");
+          if (raw) {
+            const sessionUser = JSON.parse(raw);
+            if (sessionUser?.email && sessionUser?.name) {
+              sendAdminReplyEmail(
+                payload.convId,
+                sessionUser.name,
+                sessionUser.email,
+                payload.dmMsg.senderName,
+                payload.dmMsg.content,
+              ).catch(() => {/* silenciar errores de correo */});
+            }
+          }
+        } catch { /* silenciar errores de parseo */ }
+      }
+    });
+
+    // Confirmación de lectura
+    socket.on('direct:read_ack', ({ convId }: { convId: string }) => {
+      setDirectMessages(prev =>
+        prev.map(c => c.id === convId ? { ...c, status: 'active' as const } : c)
+      );
+    });
+
+    // Conversación resuelta
+    socket.on('direct:resolved', ({ convId, resolvedAt }: { convId: string; resolvedAt: number }) => {
+      setDirectMessages(prev =>
+        prev.map(c =>
+          c.id === convId
+            ? { ...c, status: 'resolved' as const, resolvedAt, lastUserMsgAt: 0 }
+            : c
+        )
+      );
+    });
+
+    return () => { socket.disconnect(); };
+  }, [user?.id, user?.role]);
+
+  // Re-identificarse si el usuario cambia
+  useEffect(() => {
+    if (user && socketRef.current?.connected) {
+      socketRef.current.emit('identify', { userId: user.id, role: user.role });
+    }
+  }, [user?.id]);
+
 
   // ── SESIÓN ─────────────────────────────────────────────────
   const login = useCallback((email: string, password: string) => {
@@ -782,6 +978,24 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     });
     return { success: true, id };
   }, [registeredUsers]);
+
+  const unreadDirectCount = useMemo(() => {
+    if (!user || user.role !== 'cliente') return 0;
+    return directMessages.filter(
+      c => c.userId === user.id && c.status === 'pending_user'
+    ).length;
+  }, [directMessages, user?.id, user?.role]);
+
+  // Badge del admin: conversaciones no resueltas con mensajes pendientes del usuario
+  const pendingAdminCount = useMemo(() => {
+    if (!user || (user.role !== 'admin' && user.role !== 'root')) return 0;
+    return directMessages.filter(c => c.status === 'pending_admin').length;
+  }, [directMessages, user?.role]);
+
+  const resolveConversation = useCallback((convId: string) => {
+    socketRef.current?.emit('direct:resolve', { convId });
+  }, []);
+
 
   const adminsList = useMemo(() => {
     return registeredUsers
@@ -1261,6 +1475,343 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     showToast(`✓ Devolución registrada · Código QR: ${qrCode}`, "success");
   }, [purchases, showToast]);
 
+  // ── MÉTRICAS DE TENDENCIAS (caché 5 min) ─────────────────────
+  const trendCacheRef = useRef<TrendMetrics | null>(null);
+  const TREND_TTL_MS  = 5 * 60 * 1000; // 5 minutos
+
+  const getTrendMetrics = useCallback((): TrendMetrics => {
+    const cache = trendCacheRef.current;
+    if (cache && Date.now() - cache.computedAt < TREND_TTL_MS) return cache;
+
+    // Más vendidos: sumar qty de items en pedidos entregados
+    const soldMap: Record<number, number> = {};
+    purchases
+      .filter(p => p.status === 'delivered')
+      .flatMap(p => p.items)
+      .forEach(item => { soldMap[item.book.id] = (soldMap[item.book.id] ?? 0) + item.qty; });
+    const bestsellerIds = Object.entries(soldMap)
+      .sort(([, a], [, b]) => b - a)
+      .map(([id]) => Number(id));
+
+    // Mejor calificados: avg de reviews aprobadas
+    const ratingMap: Record<number, number[]> = {};
+    reviews
+      .filter(r => r.status === 'approved')
+      .forEach(r => { ratingMap[r.bookId] ??= []; ratingMap[r.bookId].push(r.rating); });
+    const topRatedIds = Object.entries(ratingMap)
+      .map(([id, rs]) => ({ id: Number(id), avg: rs.reduce((s, n) => s + n, 0) / rs.length }))
+      .sort((a, b) => b.avg - a.avg)
+      .map(x => x.id);
+
+    // Novedades: isNew=true o addedDate en los últimos 30 días
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const newBookIds = books
+      .filter(b => b.isNew || (b.addedDate && new Date(b.addedDate).getTime() > cutoff))
+      .map(b => b.id);
+
+    const metrics: TrendMetrics = { bestsellerIds, topRatedIds, newBookIds, computedAt: Date.now() };
+    trendCacheRef.current = metrics;
+    return metrics;
+  }, [purchases, reviews, books]);
+
+  // Invalidar caché cuando cambien los datos fuente
+  useEffect(() => { trendCacheRef.current = null; }, [purchases.length, reviews.length, books.length]);
+
+  // ── BOT DE RECOMENDACIONES ────────────────────────────────────
+  const sendBotMessage = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+
+    const userMsg: BotMessage = {
+      id: `bmu-${Date.now()}`,
+      sender: 'user',
+      content: text.trim(),
+      timestamp: Date.now(),
+    };
+    setBotMessages(prev => [...prev, userMsg]);
+    setBotTyping(true);
+
+    try {
+      const deliveredPurchases  = purchases.filter(p => p.status === 'delivered');
+      const purchasedBookIds    = deliveredPurchases.flatMap(p => p.items.map(i => i.book.id));
+      const purchasedAuthors    = deliveredPurchases.flatMap(p => p.items.map(i => i.book.author));
+      const purchasedCategories = deliveredPurchases.flatMap(p => p.items.flatMap(i => i.book.categories ?? []));
+
+      const candidateBooks = books.map(b => ({
+        id: b.id, title: b.title, author: b.author,
+        categories: b.categories ?? [], price: b.price,
+        rating: b.rating, available: b.available, isNew: b.isNew ?? false,
+        cover: b.cover,
+      }));
+
+      // Métricas de tendencias (cacheadas)
+      const trends = getTrendMetrics();
+
+      const resp = await fetch('http://localhost:3001/api/bot/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.id,
+          userName: user?.name,
+          message: text.trim(),
+          candidateBooks,
+          purchasedBookIds,
+          purchasedAuthors,
+          purchasedCategories,
+          preferences: user?.temasPreferencia ?? [],
+          bestsellerIds: trends.bestsellerIds,
+          topRatedIds:   trends.topRatedIds,
+          newBookIds:    trends.newBookIds,
+        }),
+      });
+
+      if (!resp.ok) throw new Error('Backend no disponible');
+
+      const data: { text: string; books?: BotMessage['books']; intent: string } = await resp.json();
+
+      const botMsg: BotMessage = {
+        id: `bmb-${Date.now()}`,
+        sender: 'bot',
+        content: data.text,
+        books: data.books,
+        intent: data.intent,
+        timestamp: Date.now(),
+      };
+      setBotMessages(prev => [...prev, botMsg]);
+    } catch {
+      const errMsg: BotMessage = {
+        id: `bmb-err-${Date.now()}`,
+        sender: 'bot',
+        content: 'Lo siento, no puedo conectarme en este momento. Intenta de nuevo en unos segundos.',
+        timestamp: Date.now(),
+      };
+      setBotMessages(prev => [...prev, errMsg]);
+    } finally {
+      setBotTyping(false);
+    }
+  }, [user, purchases, books]);
+
+  const clearBotHistory = useCallback(() => {
+    setBotMessages([]);
+    localStorage.removeItem(STORAGE_KEY_BOT_MSGS);
+  }, []);
+
+  const spotlightBook  = useCallback((id: number) => setSpotlightBookId(id), []);
+  const clearSpotlight = useCallback(() => setSpotlightBookId(null), []);
+
+  // ── RECOMENDACIONES PERSONALIZADAS ───────────────────────────
+  const refreshRecommendations = useCallback(async () => {
+    if (!user || user.role !== 'cliente') { setRecommendations([]); return; }
+
+    setRecommendationsLoading(true);
+    try {
+      // Señales desde compras entregadas
+      const deliveredPurchases = purchases.filter(p => p.status === 'delivered');
+      const purchasedBookIds   = deliveredPurchases.flatMap(p => p.items.map(i => i.book.id));
+      const purchasedAuthors   = deliveredPurchases.flatMap(p => p.items.map(i => i.book.author));
+      const purchasedCategories= deliveredPurchases.flatMap(p =>
+        p.items.flatMap(i => i.book.categories ?? [])
+      );
+
+      // Señales desde reseñas con rating ≥ 4
+      const highRatedBookIds = reviews
+        .filter(r => r.userId === user.id && r.rating >= 4)
+        .map(r => r.bookId);
+      const highRatedCategories = highRatedBookIds.flatMap(bid => {
+        const b = books.find(bk => bk.id === bid);
+        return b?.categories ?? [];
+      });
+
+      // Búsquedas recientes desde localStorage
+      let searchTerms: string[] = [];
+      try {
+        const raw = localStorage.getItem('biblion_search_history');
+        searchTerms = raw ? (JSON.parse(raw) as string[]).slice(0, 10) : [];
+      } catch { /* ignorar */ }
+
+      // Catálogo candidato (todos los libros disponibles, excluyendo los ya poseídos)
+      const ownedSet = new Set(purchasedBookIds);
+      const candidateBooks = books
+        .filter(b => !ownedSet.has(b.id))
+        .map(b => ({ id: b.id, title: b.title, author: b.author, categories: b.categories ?? [] }));
+
+      const resp = await fetch('http://localhost:3001/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purchasedBookIds,
+          purchasedAuthors,
+          purchasedCategories,
+          highRatedCategories,
+          preferences: user.temasPreferencia ?? [],
+          searchTerms,
+          candidateBooks,
+        }),
+      });
+
+      if (!resp.ok) throw new Error('Backend no disponible');
+
+      const scored: { bookId: number; score: number; reason: string }[] = await resp.json();
+
+      // Enriquecer con el objeto Book completo
+      const enriched: Recommendation[] = scored
+        .map(item => {
+          const book = books.find(b => b.id === item.bookId);
+          return book ? { book, reason: item.reason, score: item.score } : null;
+        })
+        .filter((r): r is Recommendation => r !== null);
+
+      setRecommendations(enriched);
+    } catch {
+      // Si el backend no está disponible, silencio el error (no es crítico)
+      setRecommendations([]);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }, [user, purchases, reviews, books]);
+
+  // Recalcular cuando cambien las señales clave
+  useEffect(() => {
+    refreshRecommendations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, purchases.length, reviews.length]);
+
+  // ── RESEÑAS Y CALIFICACIONES ─────────────────────────────────
+  const hasPurchasedBook = useCallback((bookId: number): boolean => {
+    if (!user) return false;
+    return purchases.some(
+      p => p.status === 'delivered' && p.items.some(i => i.book.id === bookId)
+    );
+  }, [user, purchases]);
+
+  const hasReviewedBook = useCallback((bookId: number): boolean => {
+    if (!user) return false;
+    return reviews.some(r => r.bookId === bookId && r.userId === user.id);
+  }, [user, reviews]);
+
+  const getBookReviews = useCallback((bookId: number): Review[] => {
+    return reviews.filter(r => r.bookId === bookId && r.status === 'approved')
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [reviews]);
+
+  const getBookAvgRating = useCallback((bookId: number): number | null => {
+    const approved = reviews.filter(r => r.bookId === bookId && r.status === 'approved');
+    if (approved.length === 0) return null;
+    const sum = approved.reduce((s, r) => s + r.rating, 0);
+    return Math.round((sum / approved.length) * 10) / 10;
+  }, [reviews]);
+
+  const submitReview = useCallback(async (
+    bookId: number,
+    rating: number,
+    comment: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Debes iniciar sesión para reseñar.' };
+    if (!hasPurchasedBook(bookId))
+      return { success: false, error: 'Solo puedes reseñar libros que hayas comprado y recibido.' };
+    if (hasReviewedBook(bookId))
+      return { success: false, error: 'Ya escribiste una reseña para este libro.' };
+    if (rating < 1 || rating > 5)
+      return { success: false, error: 'La calificación debe ser entre 1 y 5.' };
+    if (!comment.trim())
+      return { success: false, error: 'El comentario no puede estar vacío.' };
+
+    const newReview: Review = {
+      id: `rv-${user.id}-${bookId}-${Date.now()}`,
+      bookId,
+      userId: user.id,
+      userName: user.name,
+      rating,
+      comment: comment.trim(),
+      status: 'approved',
+      createdAt: Date.now(),
+    };
+
+    // Persistir en localStorage de forma optimista
+    setReviews(prev => [newReview, ...prev]);
+
+    // Sincronizar con el backend (sin bloquear UI)
+    try {
+      await fetch('http://localhost:3001/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookId,
+          userId: user.id,
+          userName: user.name,
+          rating,
+          comment: comment.trim(),
+        }),
+      });
+    } catch {
+      // Si el backend no está disponible la reseña queda en localStorage
+    }
+
+    return { success: true };
+  }, [user, hasPurchasedBook, hasReviewedBook]);
+
+  // ── MENSAJES DIRECTOS AL ADMIN ───────────────────────────────
+  const sendDirectMessage = useCallback((content: string) => {
+    if (!user) return;
+    const convId = `conv-${user.id}`;
+    const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = Date.now();
+    const dmMsg: DmMessage = { id: msgId, sender: 'user', senderName: user.name, content, timestamp: now };
+
+    setDirectMessages(prev => {
+      const existing = prev.find(c => c.id === convId);
+      if (existing) {
+        return prev.map(c =>
+          c.id === convId
+            ? { ...c, status: 'pending_admin' as const, lastUserMsgAt: now, messages: [...c.messages, dmMsg], updatedAt: now }
+            : c
+        );
+      }
+      const newConv: DirectMessage = {
+        id: convId, userId: user.id, userName: user.name,
+        status: 'pending_admin', lastUserMsgAt: now, messages: [dmMsg], createdAt: now, updatedAt: now,
+      };
+      return [...prev, newConv];
+    });
+
+    socketRef.current?.emit('direct:send', {
+      convId, msgId, userId: user.id, userName: user.name, content, timestamp: now,
+    });
+  }, [user]);
+
+  const adminSendToUser = useCallback((userId: string, userName: string, content: string) => {
+    if (!user) return;
+    const convId = `conv-${userId}`;
+    const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = Date.now();
+    const dmMsg: DmMessage = { id: msgId, sender: 'admin', senderName: user.name, content, timestamp: now };
+
+    setDirectMessages(prev => {
+      const existing = prev.find(c => c.id === convId);
+      if (existing) {
+        return prev.map(c =>
+          c.id === convId
+            ? { ...c, status: 'pending_user' as const, lastUserMsgAt: 0, messages: [...c.messages, dmMsg], updatedAt: now }
+            : c
+        );
+      }
+      const newConv: DirectMessage = {
+        id: convId, userId, userName,
+        status: 'pending_user', lastUserMsgAt: 0, messages: [dmMsg], createdAt: now, updatedAt: now,
+      };
+      return [...prev, newConv];
+    });
+
+    socketRef.current?.emit('direct:admin_send', {
+      convId, msgId, adminId: user.id, adminName: user.name, userId, userName, content, timestamp: now,
+    });
+  }, [user]);
+
+  const markDirectMessageRead = useCallback((convId: string) => {
+    if (!user) return;
+    socketRef.current?.emit('direct:read', { convId, readerId: user.id, readerRole: user.role });
+  }, [user]);
+
+
   // ── CHAT SYSTEM ──────────────────────────────────────────────
   const sendMessageToAdmin = useCallback((text: string) => {
     if (!user) return;
@@ -1344,7 +1895,13 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       convertReservationToCart, expireReservation,
       purchases, addPurchase, cancelOrder, returnOrder,
       reservationHistory, cancellations,
+      botMessages, botTyping, sendBotMessage, clearBotHistory,
+      spotlightBookId, spotlightBook, clearSpotlight,
+      recommendations, recommendationsLoading, refreshRecommendations,
+      reviews, submitReview, getBookReviews, getBookAvgRating, hasPurchasedBook, hasReviewedBook,
       chats, sendMessageToAdmin, replyToChat, resolveChat,
+      directMessages, unreadDirectCount, pendingAdminCount,
+      sendDirectMessage, adminSendToUser, markDirectMessageRead, resolveConversation,
       toast, toastType, showToast, dismissToast,
       walletTransactions, addWalletTransaction,
       adminsList, usersList, toggleAdminStatus, toggleUserStatus,

@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, User, BookOpen, Sparkles, Clock, Filter, X, ChevronDown, Bell, BellRing, CheckCircle, MessageCircle, Bot, Headset, Send, LogOut } from "lucide-react";
+import { RecommendedBooks } from "./shop/RecommendedBooks";
+import { BotChatWidget }   from "./shop/BotChatWidget";
+import { useShop }         from "../store/ShopContext";
 import { Link, useSearchParams, useNavigate } from "react-router";
 
 interface Book {
@@ -25,6 +28,9 @@ export function Home() {
   const [searchParams] = useSearchParams();
   const role = searchParams.get('role') || 'usuario';
   const isVisitor = role === 'visitante';
+  const { user } = useShop();
+  const isAuthenticatedCliente = user?.role === 'cliente';
+  const [botOpen, setBotOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -492,34 +498,40 @@ export function Home() {
           </p>
         </div>
 
-        {/* Sección 1: Libros Según Tus Preferencias */}
-        <section className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <Sparkles className="w-6 h-6" style={{ color: '#606C38' }} />
-            <h2 style={{ color: '#4A3728' }}>Libros Según Tus Preferencias</h2>
-          </div>
-          <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D4A373' }}>
-            <p className="text-sm" style={{ color: '#4A3728' }}>
-              📚 Basado en tus intereses: {' '}
-              {userPreferences.map((pref, idx) => (
-                <span key={pref}>
-                  <span 
-                    className="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-1"
-                    style={{ backgroundColor: '#D4A373', color: '#4A3728' }}
-                  >
-                    {pref}
+        {/* Sección 1: Recomendaciones personalizadas (clientes) / Preferencias mock (visitantes) */}
+        {isAuthenticatedCliente ? (
+          <section className="mb-12 p-6 rounded-2xl shadow-lg" style={{ backgroundColor: '#FFFFFF' }}>
+            <RecommendedBooks context="home" />
+          </section>
+        ) : (
+          <section className="mb-12">
+            <div className="flex items-center gap-3 mb-4">
+              <Sparkles className="w-6 h-6" style={{ color: '#606C38' }} />
+              <h2 style={{ color: '#4A3728' }}>Libros Según Tus Preferencias</h2>
+            </div>
+            <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D4A373' }}>
+              <p className="text-sm" style={{ color: '#4A3728' }}>
+                📚 Basado en tus intereses: {' '}
+                {userPreferences.map((pref, idx) => (
+                  <span key={pref}>
+                    <span
+                      className="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-1"
+                      style={{ backgroundColor: '#D4A373', color: '#4A3728' }}
+                    >
+                      {pref}
+                    </span>
+                    {idx < userPreferences.length - 1 ? ' ' : ''}
                   </span>
-                  {idx < userPreferences.length - 1 ? ' ' : ''}
-                </span>
+                ))}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {preferenceBooks.map((book) => (
+                <BookCard key={book.id} book={book} />
               ))}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {preferenceBooks.map((book) => (
-              <BookCard key={book.id} book={book} />
-            ))}
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
         {/* Barra de Suscripción + Chat (Oculta para visitantes) */}
         {!isVisitor && (
@@ -605,21 +617,21 @@ export function Home() {
                       </div>
                     </button>
 
-                    {/* Opción: Chat con IA */}
+                    {/* Opción: Chat con IA (Asistente Bot) */}
                     <button
-                      className="w-full flex items-center gap-4 p-4 transition-all cursor-pointer opacity-70"
+                      className="w-full flex items-center gap-4 p-4 transition-all cursor-pointer"
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEFAE0'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      onClick={() => setShowChatDropdown(false)}
+                      onClick={() => { setShowChatDropdown(false); setBotOpen(true); }}
                     >
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#606C38' }}>
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #606C38, #4A3728)' }}>
                         <Bot className="w-6 h-6" style={{ color: '#FEFAE0' }} />
                       </div>
                       <div className="text-left">
-                        <p className="font-semibold text-sm" style={{ color: '#4A3728' }}>Chat con IA</p>
-                        <p className="text-xs" style={{ color: '#4A3728', opacity: 0.6 }}>Próximamente disponible</p>
+                        <p className="font-semibold text-sm" style={{ color: '#4A3728' }}>Asistente de Libros</p>
+                        <p className="text-xs" style={{ color: '#4A3728', opacity: 0.6 }}>Recomendaciones personalizadas con IA</p>
                       </div>
-                      <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#D4A373', color: '#4A3728' }}>Pronto</span>
+                      <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#606C38', color: '#FEFAE0' }}>Nuevo</span>
                     </button>
                   </div>
                 )}
@@ -661,6 +673,10 @@ export function Home() {
           </section>
         )}
       </main>
+
+      {/* Asistente Bot de Recomendaciones */}
+      {isAuthenticatedCliente && <BotChatWidget />}
+
 
       {/* Modal de Chat con Administrador */}
       {showAdminChat && (

@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useShop, fmt } from "../../store/ShopContext";
 import type { Book } from "../../store/shopTypes";
 import { useDebounce } from "../../utils/useDebounce";
-import { X } from "lucide-react";
+import { X, Star } from "lucide-react";
+import { BookReviews } from "./BookReviews";
 
 // Las categorías se construyen dinámicamente desde el inventario (ver useMemo en Catalog)
 
@@ -63,7 +64,7 @@ const TYPE_META = {
 
 export function Catalog() {
   // Datos del contexto global (inventario dinámico)
-  const { books, addToCart, addReservation, user } = useShop();
+  const { books, addToCart, addReservation, user, getBookAvgRating, spotlightBookId, clearSpotlight } = useShop();
   const role = user?.role ?? "visitante";
 
   const [search, setSearch]       = useState("");
@@ -80,6 +81,15 @@ export function Catalog() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [conditionFilter, setConditionFilter] = useState<"todos" | "nuevo" | "usado">("todos");
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Abrir modal cuando el bot señaliza un libro
+  useEffect(() => {
+    if (!spotlightBookId) return;
+    const book = books.find(b => b.id === spotlightBookId);
+    if (book) setSelectedBook(book);
+    clearSpotlight();
+  }, [spotlightBookId]);
+
 
   const debouncedSearch = useDebounce(search, 300);
   const suggestions = getSuggestions(search, books);
@@ -554,6 +564,12 @@ export function Catalog() {
                 ) : null}
               </div>
             </div>
+            {/* Sección de reseñas */}
+            <div className="px-6 pb-2">
+              <BookReviews bookId={selectedBook.id} />
+            </div>
+
+
             <div className="px-6 pb-6">
               <button onClick={() => setSelectedBook(null)}
                 className="w-full py-2 rounded-xl text-sm text-center" style={{ color: "#6B5344" }}>
@@ -578,6 +594,8 @@ interface CardProps {
 }
 
 function BookCard({ book, canBuy, actionMsg, onBuy, onReserve, onDetail }: CardProps) {
+  const { getBookAvgRating } = useShop();
+  const avg = getBookAvgRating(book.id);
   return (
     <div className="rounded-2xl overflow-hidden transition-all hover:shadow-lg cursor-pointer group"
       style={{ background: "#fff", boxShadow: "0 3px 16px rgba(74,55,40,0.08)" }}
@@ -610,9 +628,17 @@ function BookCard({ book, canBuy, actionMsg, onBuy, onReserve, onDetail }: CardP
         <p className="text-sm font-semibold leading-tight mb-0.5 line-clamp-2"
           style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728" }}>{book.title}</p>
         <p className="text-xs mb-2" style={{ color: "#6B5344", opacity: 0.75 }}>{book.author}</p>
-        <p className="font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#4A3728" }}>
-          {fmt(book.price)}
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-bold" style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#4A3728" }}>
+            {fmt(book.price)}
+          </p>
+          {avg !== null && (
+            <div className="flex items-center gap-0.5">
+              <Star width={11} height={11} fill="#D4A373" stroke="#D4A373" strokeWidth={1.5} />
+              <span className="text-[11px] font-semibold" style={{ color: "#6B5344" }}>{avg.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
 
         {book.available ? (
           canBuy ? (
