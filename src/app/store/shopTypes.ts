@@ -51,6 +51,8 @@ export interface Purchase {
   address?: string;
   store?: string;
   tracking: TrackingStep[];
+  /** ID del usuario propietario del pedido (para filtrar por usuario) */
+  userId?: string;
 }
 
 export interface Reservation {

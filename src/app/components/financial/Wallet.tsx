@@ -114,7 +114,7 @@ export function Wallet() {
 
   // Aplicar filtros al historial (solo transacciones del usuario actual)
   const filteredTxs = useMemo(() => {
-    let txs = walletTransactions.filter(tx => !tx.userId || tx.userId === user?.id);
+    let txs = walletTransactions.filter(tx => tx.userId === user?.id);
     if (filterType) txs = txs.filter(tx => tx.type === filterType);
     if (filterFrom) {
       const from = new Date(filterFrom);

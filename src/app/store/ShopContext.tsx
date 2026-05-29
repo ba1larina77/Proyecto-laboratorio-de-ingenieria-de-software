@@ -380,7 +380,7 @@ const _fmtT = (d: Date, h = 9, m = 0) => {
 const INITIAL_PURCHASES: Purchase[] = [
   {
     // Entregado hace 2 días → dentro de la ventana de devolución (8 días)
-    id: "P-2024-001", date: _dAgo(2),
+    id: "P-2024-001", date: _dAgo(2), userId: "U-CLI-001B",
     items: [
       { book: INITIAL_BOOKS[0], qty: 1, price: 28900 },
       { book: INITIAL_BOOKS[4], qty: 2, price: 15000 },
@@ -397,7 +397,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // En tránsito desde hace 3 días
-    id: "P-2024-002", date: _dAgo(3),
+    id: "P-2024-002", date: _dAgo(3), userId: "U-CLI-001B",
     items: [{ book: INITIAL_BOOKS[2], qty: 1, price: 35000 }],
     total: 35000, status: "transit", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -410,7 +410,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // En preparación desde ayer
-    id: "P-2024-003", date: _dAgo(1),
+    id: "P-2024-003", date: _dAgo(1), userId: "U-CLI-001B",
     items: [{ book: INITIAL_BOOKS[8], qty: 1, price: 38000 }],
     total: 38000, status: "preparing", delivery: "pickup",
     store: "Biblioteca Digital Centro",
@@ -423,7 +423,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // Entregado hace 5 días → dentro de la ventana de devolución
-    id: "P-2024-004", date: _dAgo(6),
+    id: "P-2024-004", date: _dAgo(6), userId: "U-CLI-001B",
     items: [{ book: INITIAL_BOOKS[5], qty: 1, price: 32000 }],
     total: 32000, status: "delivered", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -437,7 +437,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // Entregado hace 20 días → fuera de la ventana de devolución (>8 días)
-    id: "P-2024-005", date: _dAgo(22),
+    id: "P-2024-005", date: _dAgo(22), userId: "U-CLI-001B",
     items: [{ book: INITIAL_BOOKS[3], qty: 1, price: 22900 }],
     total: 22900, status: "delivered", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -1392,15 +1392,16 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       const copyIds = (book.copyIds ?? []).slice(0, newStock);
       return { ...book, stock: newStock, available: newStock > 0, copyIds };
     }));
-    // Registrar compra
-    setPurchases(prev => [purchase, ...prev]);
-    // Registrar transacción en billetera
+    // Registrar compra (con userId para aislar por usuario)
+    setPurchases(prev => [{ ...purchase, userId: user.id }, ...prev]);
+    // Registrar transacción en billetera (con userId)
     setWalletTransactions(prev => [{
       id: transactionId,
       date: new Date(),
       type: "purchase",
       amount: -purchase.total,
       description: `Compra ${purchase.id} — ${purchase.items.map(i => i.book.title).join(", ").slice(0, 60)}`,
+      userId: user.id,
     }, ...prev]);
     // Vaciar carrito
     setCart([]);
@@ -1478,8 +1479,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   }, [reservations, showToast]);
 
   const addPurchase = useCallback((purchase: Purchase) => {
-    setPurchases(prev => [purchase, ...prev]);
-  }, []);
+    // Inyectar userId si no viene ya incluido (ej. pagos con tarjeta desde CheckoutModal)
+    setPurchases(prev => [{ ...purchase, userId: purchase.userId ?? user?.id }, ...prev]);
+  }, [user?.id]);
 
   const cancelOrder = useCallback((orderId: string) => {
     const order = purchases.find(p => p.id === orderId);
@@ -1502,6 +1504,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       type: "refund",
       amount: order.total,
       description: `Reembolso cancelación ${orderId}`,
+      userId: user?.id,
     }, ...prev]);
     setUser(prev => {
       if (!prev) return prev;
@@ -1519,6 +1522,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const returnOrder = useCallback((orderId: string, reason: string, description: string, qrCode: string) => {
     const order = purchases.find(p => p.id === orderId);
     if (!order) return;
+    if (order.status !== "delivered") {
+      showToast("⚠️ Solo se puede devolver un pedido que ya haya sido entregado", "error");
+      return;
+    }
     setPurchases(prev => prev.map(p =>
       p.id === orderId ? { ...p, status: "returned" as const } : p
     ));
@@ -1534,6 +1541,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       type: "refund",
       amount: order.total,
       description: `Reembolso devolución ${orderId}`,
+      userId: user?.id,
     }, ...prev]);
     setUser(prev => {
       if (!prev) return prev;
@@ -1969,7 +1977,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       processPurchase,
       reservations, addReservation, cancelReservation,
       convertReservationToCart, expireReservation,
-      purchases, addPurchase, cancelOrder, returnOrder,
+      purchases: purchases.filter(p => !p.userId || p.userId === user?.id),
+      addPurchase, cancelOrder, returnOrder,
       reservationHistory, cancellations,
       botMessages, botTyping, sendBotMessage, clearBotHistory,
       spotlightBookId, spotlightBook, clearSpotlight,
