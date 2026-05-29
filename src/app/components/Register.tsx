@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   BookOpen, User, Mail, Lock, Calendar,
   MapPin, Home, FileText, Eye, EyeOff, ChevronRight, ChevronLeft, Check
@@ -15,6 +15,18 @@ import {
 } from "../utils/validators";
 
 interface FieldError { [key: string]: string }
+
+/** Genera un nombre de usuario coherente a partir del primer nombre y primer apellido */
+function deriveUsername(nombres: string, apellidos: string): string {
+  const clean = (s: string) =>
+    s.toLowerCase()
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const n = clean(nombres.split(/\s+/)[0] ?? "");
+  const a = clean(apellidos.split(/\s+/)[0] ?? "");
+  if (n && a) return `${n}.${a}`;
+  return n || a;
+}
 
 const STEPS = [
   { id: 1, title: "Personal", icon: <User className="w-4 h-4" /> },
@@ -41,6 +53,9 @@ export function Register() {
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState("");
 
+  // true = usuario aún no modificado manualmente → se puede auto-rellenar
+  const usernameIsAuto = useRef(true);
+
   const [bDay, setBDay] = useState("");
   const [bMonth, setBMonth] = useState("");
   const [bYear, setBYear] = useState("");
@@ -53,6 +68,15 @@ export function Register() {
       setFormData(prev => ({ ...prev, fechaNacimiento: "" }));
     }
   }, [bDay, bMonth, bYear]);
+
+  // Auto-suggest username from nombres + apellidos (only while user hasn't edited it manually)
+  useEffect(() => {
+    if (!usernameIsAuto.current) return;
+    const suggested = deriveUsername(formData.nombres, formData.apellidos);
+    if (suggested) {
+      setFormData(prev => ({ ...prev, usuario: suggested }));
+    }
+  }, [formData.nombres, formData.apellidos]);
 
   const validateStep = (currentStep: number): boolean => {
     const newErrors: FieldError = {};
@@ -100,6 +124,8 @@ export function Register() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    // Si el usuario toca manualmente el campo "usuario", desactiva el auto-relleno
+    if (name === "usuario") usernameIsAuto.current = false;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (touched[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
@@ -238,7 +264,14 @@ export function Register() {
             {step === 2 && (
               <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
                 <Field label="Correo Electrónico" name="correo" type="email" value={formData.correo} error={touched.correo ? errors.correo : ""} onChange={handleChange} placeholder="ejemplo@correo.com" icon={<Mail />} />
-                <Field label="Nombre de Usuario" name="usuario" value={formData.usuario} error={touched.usuario ? errors.usuario : ""} onChange={handleChange} placeholder="usuario123" icon={<User />} />
+                <div className="space-y-0">
+                  <Field label="Nombre de Usuario" name="usuario" value={formData.usuario} error={touched.usuario ? errors.usuario : ""} onChange={handleChange} placeholder="juan.perez" icon={<User />} />
+                  {usernameIsAuto.current && formData.usuario && (
+                    <p className="text-[10px] mt-0.5 ml-1" style={{ color: "#606C38" }}>
+                      ✨ Sugerido automáticamente · puedes editarlo
+                    </p>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5 relative">
                     <Label className="text-[#4A3728] font-semibold text-xs ml-1">Contraseña *</Label>

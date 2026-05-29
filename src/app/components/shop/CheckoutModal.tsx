@@ -447,8 +447,7 @@ export function CheckoutModal({ open, onClose, onSuccess, onGoToWallet }: Checko
                       Si solo hay un libro, se usa para colorear marcadores según stock. */}
                   <div className="mb-3">
                     <StoreMap
-                      bookId={cart.length === 1 ? cart[0].book.id : undefined}
-                      qty={cart.length === 1 ? cart[0].qty : 1}
+                      cartItems={cart}
                       selectedStoreId={selectedStore}
                       onStoreSelect={(s) => setSelectedStore(s.id)}
                       height={300}

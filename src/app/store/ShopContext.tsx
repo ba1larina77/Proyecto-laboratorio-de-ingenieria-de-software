@@ -132,10 +132,10 @@ export const STORES: Store[] = [
   {
     id: 2,
     name: "Centro Comercial Unicentro",
-    address: "Cra. 6 #34-80, Pereira, Risaralda",
+    address: "Av. 30 de Agosto #75-51, Pereira, Risaralda",
     distance: "2.3 km",
-    lat: 4.8198,
-    lng: -75.6951,
+    lat: 4.8068,
+    lng: -75.7178,
     hours: "Lun-Dom 10:00 - 22:00",
   },
   {
@@ -254,6 +254,7 @@ interface ShopContextType {
   }) => { success: boolean; error?: string };
   registerAdmin: (data: {
     correo: string; usuario: string; contrasena: string;
+    nombres?: string; apellidos?: string; dni?: string;
   }) => { success: boolean; id?: string; error?: string };
   adminsList: { id: string; nombres: string; apellidos: string; correo: string; usuario: string; active: boolean; createdAt: Date; }[];
   usersList: { id: string; nombres: string; apellidos: string; correo: string; usuario: string; active: boolean; createdAt: Date; }[];
@@ -369,45 +370,83 @@ interface ShopContextType {
 export const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 // ── DATOS INICIALES DE DEMO ───────────────────────────────────
+// Helpers para fechas relativas (evitan que los pedidos demo queden siempre expirados)
+const _dAgo = (n: number) => new Date(Date.now() - n * 86400000);
+const _fmtT = (d: Date, h = 9, m = 0) => {
+  const mo = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  return `${d.getDate()} ${mo[d.getMonth()]} ${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+};
+
 const INITIAL_PURCHASES: Purchase[] = [
   {
-    id: "P-2024-001", date: new Date("2024-11-15"),
+    // Entregado hace 2 días → dentro de la ventana de devolución (8 días)
+    id: "P-2024-001", date: _dAgo(2),
     items: [
       { book: INITIAL_BOOKS[0], qty: 1, price: 28900 },
       { book: INITIAL_BOOKS[4], qty: 2, price: 15000 },
     ],
     total: 58900, status: "delivered", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
-    deliveredAt: new Date("2024-11-17"),
+    deliveredAt: _dAgo(1),
     tracking: [
-      { status: "Pedido recibido", done: true, date: "15 Nov 09:15" },
-      { status: "En preparación", done: true, date: "15 Nov 11:30" },
-      { status: "Enviado", done: true, date: "16 Nov 08:00" },
-      { status: "Entregado", done: true, date: "17 Nov 14:22" },
+      { status: "Pedido recibido", done: true, date: _fmtT(_dAgo(2), 9, 15) },
+      { status: "En preparación",  done: true, date: _fmtT(_dAgo(2), 11, 30) },
+      { status: "Enviado",         done: true, date: _fmtT(_dAgo(1), 8, 0) },
+      { status: "Entregado",       done: true, date: _fmtT(_dAgo(1), 14, 22) },
     ],
   },
   {
-    id: "P-2024-002", date: new Date("2024-12-02"),
+    // En tránsito desde hace 3 días
+    id: "P-2024-002", date: _dAgo(3),
     items: [{ book: INITIAL_BOOKS[2], qty: 1, price: 35000 }],
     total: 35000, status: "transit", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
     tracking: [
-      { status: "Pedido recibido", done: true, date: "2 Dic 10:00" },
-      { status: "En preparación", done: true, date: "2 Dic 14:00" },
-      { status: "Enviado", done: true, date: "3 Dic 09:00" },
-      { status: "Entregado", done: false, date: "" },
+      { status: "Pedido recibido", done: true, date: _fmtT(_dAgo(3), 10, 0) },
+      { status: "En preparación",  done: true, date: _fmtT(_dAgo(3), 14, 0) },
+      { status: "Enviado",         done: true, date: _fmtT(_dAgo(2), 9, 0) },
+      { status: "Entregado",       done: false, date: "" },
     ],
   },
   {
-    id: "P-2024-003", date: new Date("2024-12-10"),
+    // En preparación desde ayer
+    id: "P-2024-003", date: _dAgo(1),
     items: [{ book: INITIAL_BOOKS[8], qty: 1, price: 38000 }],
     total: 38000, status: "preparing", delivery: "pickup",
     store: "Biblioteca Digital Centro",
     tracking: [
-      { status: "Pedido recibido", done: true, date: "10 Dic 16:45" },
-      { status: "En preparación", done: false, date: "" },
+      { status: "Pedido recibido",    done: true,  date: _fmtT(_dAgo(1), 16, 45) },
+      { status: "En preparación",     done: false, date: "" },
       { status: "Listo para recoger", done: false, date: "" },
-      { status: "Recogido", done: false, date: "" },
+      { status: "Recogido",           done: false, date: "" },
+    ],
+  },
+  {
+    // Entregado hace 5 días → dentro de la ventana de devolución
+    id: "P-2024-004", date: _dAgo(6),
+    items: [{ book: INITIAL_BOOKS[5], qty: 1, price: 32000 }],
+    total: 32000, status: "delivered", delivery: "shipping",
+    address: "Calle 100 #15-20, Bogotá",
+    deliveredAt: _dAgo(5),
+    tracking: [
+      { status: "Pedido recibido", done: true, date: _fmtT(_dAgo(6), 10, 20) },
+      { status: "En preparación",  done: true, date: _fmtT(_dAgo(6), 13, 0) },
+      { status: "Enviado",         done: true, date: _fmtT(_dAgo(5), 9, 30) },
+      { status: "Entregado",       done: true, date: _fmtT(_dAgo(5), 17, 10) },
+    ],
+  },
+  {
+    // Entregado hace 20 días → fuera de la ventana de devolución (>8 días)
+    id: "P-2024-005", date: _dAgo(22),
+    items: [{ book: INITIAL_BOOKS[3], qty: 1, price: 22900 }],
+    total: 22900, status: "delivered", delivery: "shipping",
+    address: "Calle 100 #15-20, Bogotá",
+    deliveredAt: _dAgo(20),
+    tracking: [
+      { status: "Pedido recibido", done: true, date: _fmtT(_dAgo(22), 11, 5) },
+      { status: "En preparación",  done: true, date: _fmtT(_dAgo(22), 14, 30) },
+      { status: "Enviado",         done: true, date: _fmtT(_dAgo(21), 8, 45) },
+      { status: "Entregado",       done: true, date: _fmtT(_dAgo(20), 15, 0) },
     ],
   },
 ];
@@ -491,6 +530,15 @@ function loadPurchases(): Purchase[] {
     const data = localStorage.getItem(STORAGE_KEY_PURCHASES);
     if (!data) return INITIAL_PURCHASES;
     const parsed = JSON.parse(data);
+
+    // Migración: si todos los pedidos guardados son del año 2024 (datos demo caducos),
+    // se descartan y se cargan los datos iniciales con fechas relativas actualizadas.
+    const allStale = parsed.every((p: any) => new Date(p.date).getFullYear() <= 2024);
+    if (allStale && parsed.length > 0) {
+      localStorage.removeItem(STORAGE_KEY_PURCHASES);
+      return INITIAL_PURCHASES;
+    }
+
     // Re-parse dates
     return parsed.map((p: Purchase) => ({
       ...p,
@@ -901,7 +949,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     correo: string; usuario: string; contrasena: string;
     temasPreferencia: string[];
   }) => {
-    // Verificar duplicados de correo o usuario
+    // Verificar duplicados de correo, usuario y DNI
     const emailTaken = registeredUsers.find(
       u => u.email === data.correo.trim().toLowerCase()
     );
@@ -913,6 +961,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     );
     if (usernameTaken) {
       return { success: false, error: "Ese nombre de usuario ya está en uso. Elige otro." };
+    }
+    const dniTaken = registeredUsers.find(
+      u => u.dni && u.dni.trim() === data.dni.trim()
+    );
+    if (dniTaken) {
+      return { success: false, error: "Ya existe una cuenta registrada con ese número de identificación." };
     }
 
     const newUser: SessionUser & { password: string } = {
@@ -946,6 +1000,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   // ── REGISTRO DE ADMINISTRADOR (solo root) ──────────────────
   const registerAdmin = useCallback((data: {
     correo: string; usuario: string; contrasena: string;
+    nombres?: string; apellidos?: string; dni?: string;
   }) => {
     const emailTaken = registeredUsers.find(
       u => u.email.toLowerCase() === data.correo.trim().toLowerCase()
@@ -959,16 +1014,30 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     if (usernameTaken) {
       return { success: false, error: "Ese nombre de usuario ya está en uso." };
     }
+    if (data.dni) {
+      const dniTaken = registeredUsers.find(
+        u => u.dni && u.dni.trim() === data.dni!.trim()
+      );
+      if (dniTaken) {
+        return { success: false, error: "Ya existe una cuenta con ese número de identificación." };
+      }
+    }
     const id = "U-ADM-" + Date.now();
+    const displayName = data.nombres && data.apellidos
+      ? `${data.nombres.trim()} ${data.apellidos.trim()}`
+      : `Administrador (${data.usuario})`;
     const newAdmin: SessionUser & { password: string } = {
       id,
-      name: `Nuevo Administrador (${data.usuario})`,
+      name: displayName,
       email: data.correo.trim().toLowerCase(),
       username: data.usuario.trim().toLowerCase(),
       password: data.contrasena,
       role: "admin",
       balance: 0,
       isProfileComplete: false,
+      nombres: data.nombres?.trim(),
+      apellidos: data.apellidos?.trim(),
+      dni: data.dni?.trim(),
     };
     setRegisteredUsers(prev => {
       const next = [...prev, newAdmin];

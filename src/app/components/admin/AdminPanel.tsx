@@ -286,7 +286,7 @@ export function AdminPanel() {
       try {
         const q = encodeURIComponent(title);
         const apiKey = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
-        const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${q}&maxResults=1&key=${apiKey}`;
+        const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${q}&maxResults=10&key=${apiKey}`;
         
         const res = await fetch(url, {
           method: 'GET',
@@ -299,7 +299,10 @@ export function AdminPanel() {
         
         if (!isMounted) return;
 
-        const info = data?.items?.[0]?.volumeInfo;
+        if (!data?.items?.length) { setGbSearching(false); return; }
+        // Preferir el primer resultado que tenga editorial; si ninguno la tiene, usar el primero
+        const bestItem = data.items.find((i: any) => i.volumeInfo?.publisher) ?? data.items[0];
+        const info = bestItem?.volumeInfo;
         if (!info) { setGbSearching(false); return; }
 
         const author      = (info.authors ?? [])[0] ?? "";
@@ -340,7 +343,7 @@ export function AdminPanel() {
 
   const previewId = editId ?? (books.length > 0 ? Math.max(...books.map(b => b.id)) + 1 : 1);
 
-  const GB_LOCKED_FIELDS = ["author", "isbn", "year", "pages", "publisher"] as const;
+  const GB_LOCKED_FIELDS = ["author", "isbn", "year", "pages"] as const;
   type GbLockedField = typeof GB_LOCKED_FIELDS[number];
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {

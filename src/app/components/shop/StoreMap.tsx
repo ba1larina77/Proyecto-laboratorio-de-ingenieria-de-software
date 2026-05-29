@@ -17,7 +17,7 @@ import "leaflet/dist/leaflet.css";
 import {
   useShop, STORES, PEREIRA_CENTER, haversineKm,
 } from "../../store/ShopContext";
-import type { Store } from "../../store/shopTypes";
+import type { Store, Book } from "../../store/shopTypes";
 
 // ── Fix de iconos Leaflet (default markers no cargan con bundlers) ──
 // Reutilizamos los CDN oficiales para iconos en azul y verde (highlight)
@@ -63,10 +63,12 @@ function MapResizeHandler() {
 }
 
 interface StoreMapProps {
-  /** Si se proporciona, los marcadores se colorean según disponibilidad */
+  /** Libro único a verificar (modo libro individual) */
   bookId?: number;
-  /** Cantidad requerida (default: 1) */
+  /** Cantidad requerida para bookId (default: 1) */
   qty?: number;
+  /** Ítems del carrito: verifica disponibilidad de TODOS los libros por tienda */
+  cartItems?: { book: Book; qty: number }[];
   /** Callback al hacer clic en "Seleccionar" dentro de un popup */
   onStoreSelect?: (store: Store) => void;
   /** Tienda actualmente seleccionada (resaltada visualmente) */
@@ -78,6 +80,7 @@ interface StoreMapProps {
 export function StoreMap({
   bookId,
   qty = 1,
+  cartItems,
   onStoreSelect,
   selectedStoreId = null,
   height = 400,
@@ -85,21 +88,43 @@ export function StoreMap({
   const { getStoreStock, nearestStoreWithStock } = useShop();
   const mapRef = useRef<L.Map | null>(null);
 
-  // M2-HU11: tienda más cercana con disponibilidad (si hay libro)
-  const nearest = useMemo(() => {
-    if (typeof bookId !== "number") return null;
-    return nearestStoreWithStock(bookId, qty, PEREIRA_CENTER);
-  }, [bookId, qty, nearestStoreWithStock]);
+  // ¿Hay algo que verificar? (modo libro individual o carrito)
+  const isCheckingStock = typeof bookId === "number" || (cartItems !== undefined && cartItems.length > 0);
 
-  // Construir lista de tiendas con metadatos
+  // Construir lista de tiendas con metadatos (stock y disponibilidad)
   const storesWithMeta = useMemo(() => {
     return STORES.map(s => {
-      const stock = typeof bookId === "number" ? getStoreStock(s.id, bookId) : null;
-      const hasStock = stock === null ? true : stock >= qty;
+      let stock: number | null = null;
+      let hasStock = true;
+
+      if (typeof bookId === "number") {
+        // Modo libro individual
+        stock = getStoreStock(s.id, bookId);
+        hasStock = stock >= qty;
+      } else if (cartItems && cartItems.length > 0) {
+        // Modo carrito: todos los ítems deben tener stock suficiente
+        hasStock = cartItems.every(item => getStoreStock(s.id, item.book.id) >= item.qty);
+      }
+
       const distKm = haversineKm(PEREIRA_CENTER, { lat: s.lat, lng: s.lng });
       return { store: s, stock, hasStock, distKm };
     });
-  }, [bookId, qty, getStoreStock]);
+  }, [bookId, cartItems, qty, getStoreStock]);
+
+  // M2-HU11: tienda más cercana con disponibilidad
+  const nearest = useMemo(() => {
+    if (typeof bookId === "number") {
+      return nearestStoreWithStock(bookId, qty, PEREIRA_CENTER);
+    }
+    if (cartItems && cartItems.length > 0) {
+      const available = storesWithMeta
+        .filter(m => m.hasStock)
+        .sort((a, b) => a.distKm - b.distKm);
+      if (available.length === 0) return null;
+      return { store: available[0].store, distanceKm: available[0].distKm };
+    }
+    return null;
+  }, [bookId, cartItems, qty, nearestStoreWithStock, storesWithMeta]);
 
   return (
     <div
@@ -116,7 +141,7 @@ export function StoreMap({
             📍 Tiendas físicas en Pereira
           </div>
           <div className="text-xs" style={{ color: "#6B5344" }}>
-            {typeof bookId === "number"
+            {isCheckingStock
               ? "Marcadores verdes: con stock disponible · Rojos: sin stock"
               : "Haz clic en un marcador para ver detalles"}
           </div>
@@ -149,7 +174,7 @@ export function StoreMap({
           {storesWithMeta.map(({ store, stock, hasStock, distKm }) => {
             const isSelected = selectedStoreId === store.id;
             const isNearest = nearest?.store.id === store.id;
-            const icon = typeof bookId === "number"
+            const icon = isCheckingStock
               ? (hasStock ? greenIcon : redIcon)
               : (isSelected || isNearest ? greenIcon : blueIcon);
             return (
@@ -171,7 +196,7 @@ export function StoreMap({
                       📏 {distKm.toFixed(2)} km del centro
                     </div>
 
-                    {typeof bookId === "number" && (
+                    {isCheckingStock && (
                       <div
                         style={{
                           padding: "6px 8px",
@@ -183,9 +208,13 @@ export function StoreMap({
                           fontWeight: 600,
                         }}
                       >
-                        {hasStock
-                          ? `✓ Disponible: ${stock} ejemplar(es)`
-                          : `✗ Sin stock (disponibles: ${stock ?? 0})`}
+                        {typeof bookId === "number"
+                          ? (hasStock
+                              ? `✓ Disponible: ${stock} ejemplar(es)`
+                              : `✗ Sin stock (disponibles: ${stock ?? 0})`)
+                          : (hasStock
+                              ? "✓ Todos los libros disponibles"
+                              : "✗ Stock insuficiente para este pedido")}
                       </div>
                     )}
 

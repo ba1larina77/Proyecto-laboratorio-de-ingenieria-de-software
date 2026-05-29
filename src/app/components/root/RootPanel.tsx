@@ -3,10 +3,28 @@ import { Eye, EyeOff, Mail, AlertTriangle } from "lucide-react";
 import { useShop } from "../../store/ShopContext";
 import { generateTempPassword, sendAdminWelcomeEmail } from "../../utils/birthdayEmail";
 
-const emptyForm = { correo: "", confirmarCorreo: "" };
+const emptyForm = { nombres: "", apellidos: "", dni: "", correo: "", confirmarCorreo: "" };
 
-function validateAdminEmail(f: typeof emptyForm) {
+/** Genera un nombre de usuario coherente a partir del primer nombre y primer apellido */
+function deriveUsername(nombres: string, apellidos: string): string {
+  const clean = (s: string) =>
+    s.toLowerCase()
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const n = clean(nombres.split(/\s+/)[0] ?? "");
+  const a = clean(apellidos.split(/\s+/)[0] ?? "");
+  if (n && a) return `${n}.${a}`;
+  return n || a;
+}
+
+function validateAdminForm(f: typeof emptyForm) {
   const e: Record<string, string> = {};
+  if (!f.nombres.trim() || f.nombres.trim().length < 2)
+    e.nombres = "El nombre debe tener al menos 2 caracteres";
+  if (!f.apellidos.trim() || f.apellidos.trim().length < 2)
+    e.apellidos = "El apellido debe tener al menos 2 caracteres";
+  if (!/^\d{10}$/.test(f.dni.trim()))
+    e.dni = "El número de identificación debe tener exactamente 10 dígitos";
   if (!f.correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.correo))
     e.correo = "Correo electrónico inválido";
   if (f.correo !== f.confirmarCorreo)
@@ -35,11 +53,13 @@ export function RootPanel() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    const updated = { ...form, [name]: value };
+    // DNI: solo dígitos
+    const cleaned = name === "dni" ? value.replace(/\D/g, "").slice(0, 10) : value;
+    const updated = { ...form, [name]: cleaned };
     setForm(updated);
     setServerError("");
     if (touched[name]) {
-      const errs = validateAdminEmail(updated);
+      const errs = validateAdminForm(updated);
       setErrors(p => ({ ...p, [name]: errs[name] || "" }));
     }
   }
@@ -47,14 +67,14 @@ export function RootPanel() {
   function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
     const { name } = e.target;
     setTouched(p => ({ ...p, [name]: true }));
-    const errs = validateAdminEmail(form);
+    const errs = validateAdminForm(form);
     setErrors(p => ({ ...p, [name]: errs[name] || "" }));
   }
 
   function handleOpenConfirmModal() {
     setServerError("");
-    setTouched({ correo: true, confirmarCorreo: true });
-    const errs = validateAdminEmail(form);
+    setTouched({ nombres: true, apellidos: true, dni: true, correo: true, confirmarCorreo: true });
+    const errs = validateAdminForm(form);
     setErrors(errs);
     if (Object.values(errs).some(v => v)) return;
     setConfirmModal(true);
@@ -62,12 +82,17 @@ export function RootPanel() {
 
   function handleConfirmCreateAdmin() {
     setConfirmModal(false);
-    const tempPass  = generateTempPassword();
-    const correo    = form.correo;
-    const usuario   = correo.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    const tempPass = generateTempPassword();
+    const correo   = form.correo;
+    // Nombre de usuario coherente: derivado de nombres+apellidos; fallback al prefijo del correo
+    const usuario  = deriveUsername(form.nombres, form.apellidos)
+                     || correo.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
     setSaving(true);
     setTimeout(() => {
-      const result = registerAdmin({ correo, usuario, contrasena: tempPass });
+      const result = registerAdmin({
+        correo, usuario, contrasena: tempPass,
+        nombres: form.nombres, apellidos: form.apellidos, dni: form.dni,
+      });
       setSaving(false);
       if (!result.success) {
         setServerError(result.error || "Error al crear el administrador.");
@@ -305,14 +330,31 @@ export function RootPanel() {
             <h3 className="text-xl font-bold mb-2" style={{ fontFamily: "'Playfair Display', serif", color: "#4A3728" }}>
               ¿Crear administrador?
             </h3>
-            <p className="text-sm mb-1" style={{ color: "#6B5344" }}>
-              Se creará un nuevo usuario administrador con el correo:
+            <p className="text-sm mb-3" style={{ color: "#6B5344" }}>
+              Se creará la siguiente cuenta administrador:
             </p>
-            <p className="text-sm font-bold px-3 py-2 rounded-xl my-3 break-all"
-              style={{ background: "#F5EDD3", color: "#4A3728" }}>
-              {form.correo}
-            </p>
-            <p className="text-xs mb-6" style={{ color: "#6B5344" }}>
+            <div className="rounded-xl px-4 py-3 my-2 text-left space-y-1.5"
+              style={{ background: "#F5EDD3" }}>
+              <div className="flex justify-between text-xs">
+                <span style={{ color: "#6B5344" }}>Nombre</span>
+                <span className="font-bold" style={{ color: "#4A3728" }}>{form.nombres} {form.apellidos}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span style={{ color: "#6B5344" }}>Usuario</span>
+                <span className="font-bold font-mono" style={{ color: "#4A3728" }}>
+                  {deriveUsername(form.nombres, form.apellidos) || form.correo.split("@")[0]}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span style={{ color: "#6B5344" }}>ID</span>
+                <span className="font-bold font-mono" style={{ color: "#4A3728" }}>{form.dni}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span style={{ color: "#6B5344" }}>Correo</span>
+                <span className="font-bold break-all" style={{ color: "#4A3728" }}>{form.correo}</span>
+              </div>
+            </div>
+            <p className="text-xs mt-3 mb-6" style={{ color: "#6B5344" }}>
               Se enviará una clave temporal al correo indicado para que el administrador pueda ingresar al sistema.
             </p>
             <div className="flex gap-3">
@@ -362,6 +404,57 @@ export function RootPanel() {
           )}
 
           <div className="space-y-4 mb-6">
+            {/* ── Nombre y Apellido (para generar usuario coherente) ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Nombres *</label>
+                <input name="nombres" value={form.nombres}
+                  onChange={handleChange} onBlur={handleBlur}
+                  placeholder="Carlos"
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={inputStyle("nombres")} />
+                <FieldErr name="nombres" errs={errors} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Apellidos *</label>
+                <input name="apellidos" value={form.apellidos}
+                  onChange={handleChange} onBlur={handleBlur}
+                  placeholder="Rodríguez"
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={inputStyle("apellidos")} />
+                <FieldErr name="apellidos" errs={errors} />
+              </div>
+            </div>
+
+            {/* ── DNI (10 dígitos) ── */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>
+                Número de identificación (10 dígitos) *
+              </label>
+              <input name="dni" type="text" inputMode="numeric" value={form.dni}
+                onChange={handleChange} onBlur={handleBlur}
+                placeholder="1234567890"
+                maxLength={10}
+                className="w-full px-4 py-2.5 rounded-xl text-sm outline-none font-mono tracking-widest"
+                style={inputStyle("dni")} />
+              <FieldErr name="dni" errs={errors} />
+            </div>
+
+            {/* ── Nombre de usuario auto-generado (solo lectura) ── */}
+            {form.nombres && form.apellidos && (
+              <div className="rounded-xl px-4 py-2.5 text-xs flex items-center gap-2"
+                style={{ background: "rgba(96,108,56,0.08)", border: "1.5px solid #606C38" }}>
+                <span style={{ color: "#606C38" }}>👤</span>
+                <span style={{ color: "#4A3728" }}>
+                  Nombre de usuario asignado:{" "}
+                  <strong className="font-mono">
+                    {deriveUsername(form.nombres, form.apellidos) || "—"}
+                  </strong>
+                </span>
+              </div>
+            )}
+
+            {/* ── Correo ── */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A3728" }}>Correo electrónico *</label>
               <input name="correo" type="email" value={form.correo}
