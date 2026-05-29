@@ -380,7 +380,7 @@ const _fmtT = (d: Date, h = 9, m = 0) => {
 const INITIAL_PURCHASES: Purchase[] = [
   {
     // Entregado hace 2 días → dentro de la ventana de devolución (8 días)
-    id: "P-2024-001", date: _dAgo(2), userId: "U-CLI-001B",
+    id: "P-2024-001", date: _dAgo(2), userId: "U-CLI-001",
     items: [
       { book: INITIAL_BOOKS[0], qty: 1, price: 28900 },
       { book: INITIAL_BOOKS[4], qty: 2, price: 15000 },
@@ -397,7 +397,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // En tránsito desde hace 3 días
-    id: "P-2024-002", date: _dAgo(3), userId: "U-CLI-001B",
+    id: "P-2024-002", date: _dAgo(3), userId: "U-CLI-001",
     items: [{ book: INITIAL_BOOKS[2], qty: 1, price: 35000 }],
     total: 35000, status: "transit", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -410,7 +410,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // En preparación desde ayer
-    id: "P-2024-003", date: _dAgo(1), userId: "U-CLI-001B",
+    id: "P-2024-003", date: _dAgo(1), userId: "U-CLI-001",
     items: [{ book: INITIAL_BOOKS[8], qty: 1, price: 38000 }],
     total: 38000, status: "preparing", delivery: "pickup",
     store: "Biblioteca Digital Centro",
@@ -423,7 +423,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // Entregado hace 5 días → dentro de la ventana de devolución
-    id: "P-2024-004", date: _dAgo(6), userId: "U-CLI-001B",
+    id: "P-2024-004", date: _dAgo(6), userId: "U-CLI-001",
     items: [{ book: INITIAL_BOOKS[5], qty: 1, price: 32000 }],
     total: 32000, status: "delivered", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -437,7 +437,7 @@ const INITIAL_PURCHASES: Purchase[] = [
   },
   {
     // Entregado hace 20 días → fuera de la ventana de devolución (>8 días)
-    id: "P-2024-005", date: _dAgo(22), userId: "U-CLI-001B",
+    id: "P-2024-005", date: _dAgo(22), userId: "U-CLI-001",
     items: [{ book: INITIAL_BOOKS[3], qty: 1, price: 22900 }],
     total: 22900, status: "delivered", delivery: "shipping",
     address: "Calle 100 #15-20, Bogotá",
@@ -454,9 +454,9 @@ const INITIAL_PURCHASES: Purchase[] = [
 
 // ── TRANSACCIONES INICIALES DE BILLETERA (demo) ───────────────
 const INITIAL_WALLET_TXS: WalletTransaction[] = [
-  { id: "t1", date: new Date("2024-12-01"), type: "recharge", amount: 50000,  description: "Recarga desde tarjeta •4521", userId: "U-CLI-001B" },
-  { id: "t2", date: new Date("2024-12-03"), type: "purchase", amount: -28900, description: "Cien Años de Soledad",        userId: "U-CLI-001B" },
-  { id: "t3", date: new Date("2024-12-10"), type: "refund",   amount: 35000,  description: "Reembolso pedido P-2024-002", userId: "U-CLI-001B" },
+  { id: "t1", date: new Date("2024-12-01"), type: "recharge", amount: 50000,  description: "Recarga desde tarjeta •4521", userId: "U-CLI-001" },
+  { id: "t2", date: new Date("2024-12-03"), type: "purchase", amount: -28900, description: "Cien Años de Soledad",        userId: "U-CLI-001" },
+  { id: "t3", date: new Date("2024-12-10"), type: "refund",   amount: 35000,  description: "Reembolso pedido P-2024-002", userId: "U-CLI-001" },
 ];
 
 // ── PERSISTENCIA EN localStorage ─────────────────────────────
@@ -531,10 +531,19 @@ function loadPurchases(): Purchase[] {
     if (!data) return INITIAL_PURCHASES;
     const parsed = JSON.parse(data);
 
-    // Migración: si todos los pedidos guardados son del año 2024 (datos demo caducos),
-    // se descartan y se cargan los datos iniciales con fechas relativas actualizadas.
+    // Migración 1: si todos los pedidos guardados son del año 2024 (datos demo caducos).
     const allStale = parsed.every((p: any) => new Date(p.date).getFullYear() <= 2024);
     if (allStale && parsed.length > 0) {
+      localStorage.removeItem(STORAGE_KEY_PURCHASES);
+      return INITIAL_PURCHASES;
+    }
+
+    // Migración 2: si todos los pedidos demo tienen userId "U-CLI-001B" (ID antiguo del demo),
+    // resetear para que usen el userId correcto "U-CLI-001".
+    const allOldDemo = parsed.length > 0 && parsed.every(
+      (p: any) => p.userId === "U-CLI-001B" || p.id?.startsWith("P-2024-")
+    );
+    if (allOldDemo) {
       localStorage.removeItem(STORAGE_KEY_PURCHASES);
       return INITIAL_PURCHASES;
     }
@@ -660,6 +669,14 @@ function loadWalletTxs(): WalletTransaction[] {
     const data = localStorage.getItem(STORAGE_KEY_WALLET_TXS);
     if (!data) return INITIAL_WALLET_TXS;
     const parsed = JSON.parse(data);
+    // Migración: si todas las transacciones demo tienen userId "U-CLI-001B" (ID antiguo), resetear.
+    const allOldDemo = parsed.length > 0 && parsed.every(
+      (tx: any) => tx.userId === "U-CLI-001B" || ["t1","t2","t3"].includes(tx.id)
+    );
+    if (allOldDemo) {
+      localStorage.removeItem(STORAGE_KEY_WALLET_TXS);
+      return INITIAL_WALLET_TXS;
+    }
     return parsed.map((tx: WalletTransaction) => ({ ...tx, date: new Date(tx.date) }));
   } catch {
     return INITIAL_WALLET_TXS;
