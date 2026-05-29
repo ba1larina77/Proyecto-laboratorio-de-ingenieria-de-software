@@ -1977,7 +1977,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       processPurchase,
       reservations, addReservation, cancelReservation,
       convertReservationToCart, expireReservation,
-      purchases: purchases.filter(p => !p.userId || p.userId === user?.id),
+      purchases: purchases.filter(p => p.userId === user?.id),
       addPurchase, cancelOrder, returnOrder,
       reservationHistory, cancellations,
       botMessages, botTyping, sendBotMessage, clearBotHistory,
