@@ -1,0 +1,17 @@
+MODELO 3D DEL MÓDULO DE REALIDAD AUMENTADA
+
+book.glb  →  Modelo base ÚNICO del libro.
+
+Cómo funciona:
+  El módulo NO usa un modelo por cada libro. Usa este único book.glb y le
+  cambia dinámicamente la textura de la PORTADA por la imagen (cover) de cada
+  libro, en tiempo de ejecución (ver src/app/components/ar/ARViewer.tsx).
+
+Estructura de materiales de book.glb:
+  · "Architexture" → la cubierta/portada  (aquí se aplica el cover del libro)
+  · "Bookpage"     → las páginas
+
+Opcional — AR en iPhone:
+  Para AR real en Safari (iOS) se necesita una versión .usdz del modelo.
+  Convierte book.glb → book.usdz con "Reality Converter" de Apple y colócalo
+  aquí como book.usdz (luego añade ios-src="/models/book.usdz" al model-viewer).
