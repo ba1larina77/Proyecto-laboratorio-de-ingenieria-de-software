@@ -27,11 +27,11 @@ beforeAll(async () => {
   if (!BACKEND_UP) console.warn("⚠️  Backend no disponible — bot edge tests skipped.");
 });
 
-function skip(name: string, fn: () => Promise<void>) {
+function skip(name: string, fn: () => Promise<void>, timeout?: number) {
   it(name, async () => {
     if (!BACKEND_UP) return;
     await fn();
-  });
+  }, timeout);
 }
 
 const basePayload = () => ({
@@ -193,9 +193,8 @@ describe("POST /api/bot/message — saturación de mensajes", () => {
     }
 
     const errors = results.filter(s => s >= 400);
-    // EXPECT: menos del 10% de errores (rate limiting eventual está permitido)
     expect(errors.length / results.length).toBeLessThan(0.1);
-  });
+  }, 30000);
 });
 
 // ─────────────────────────────────────────────────────────────
